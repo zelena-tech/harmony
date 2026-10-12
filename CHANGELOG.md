@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 — 2026-10-12
+
+No contract or engine code changes.
+
+- Fixed: the release hashes published in 0.1.0 came from a native Windows
+  build. The wasm embeds the absolute path of the local Cargo registry in
+  soroban-sdk panic messages, so those hashes could not be reproduced on
+  another machine.
+- New `scripts/build-wasm.sh`: builds the contracts in a pinned image
+  (`rust:1.93.1-slim-bookworm`, fixed by digest). The expected hashes are in
+  `contracts/wasm.sha256`, and CI checks them on every push.
+- CI: `cargo test --locked`, Node 20, 22 and 24, and actions on Node 24
+  runtimes.
+
 ## 0.1.0 — 2026-10-12
 
 First public release, prepared for an external audit.

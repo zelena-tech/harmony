@@ -23,20 +23,19 @@ What we checked, and what we could not:
 |---|---|
 | Contract spec (all types, functions, errors and doc comments) of the deployed wasm vs a build of this source | **Identical**: `stellar contract info interface --output json-formatted` produces the same 21 973 bytes for both |
 | Contract meta (Rust and SDK versions) | **Identical** |
-| Unoptimized build of this source (Rust 1.93.1) | `de8b32f4e70a7d060a2985ea58d4f56fe8f79402c92a88692953903670dc0150`, 49 760 bytes |
-| Optimized with Stellar CLI 25.2.0 | `17e8821a9a42f7885612d37a042a580981de35833133f19ad0487b7573455dd0`, 36 975 bytes |
-| Byte-identical to the deployed wasm | **No**. The deployed wasm was optimized with a tool version that was not recorded (37 360 bytes). Byte-level reproducibility is therefore not established for this deployment. |
+| Reproducible build of this source (`scripts/build-wasm.sh`, unoptimized) | `84986a8dc22dd97070c41ceac5b93d5053c70f9af2639e6248ef9c1c1ff86ec7` |
+| Byte-identical to the deployed wasm | **No**, for two reasons. The deployed wasm was built natively on Windows, so it embeds the absolute path of that machine's Cargo registry in soroban-sdk panic messages. It was also optimized with a tool version that was not recorded. A native Windows build of this source with a Cargo path of the same length, optimized with Stellar CLI 25.2.0, gives 36 975 bytes against 37 360 deployed, so the optimizer differs too. Byte-level reproducibility is therefore not established for this deployment. |
 
 The spec embeds every public type, function signature and doc comment of the
 source, so an identical spec plus identical toolchain metadata is strong
-evidence that the deployed contract was built from this source. For any
-future deployment we will publish the exact toolchain, CLI version and wasm
-hash before deploying (see [deployment.md](../deployment.md)).
+evidence that the deployed contract was built from this source. Future
+deployments will use the reproducible build, and we will publish its hash and
+the optimizer version before deploying (see [deployment.md](../deployment.md)).
 
 Test-only changes made in this repository (`#[cfg(test)]` code, not part of
 the wasm): the missing `testutils::Ledger` import, a distinct funder in 6
-tests, and one test per finding. The release wasm built before and after these
-changes has the same hash (`de8b32f4…` above).
+tests, and one test per finding. Building the release wasm before and after
+these changes on the same machine gives the same hash.
 
 ### Reproduce the check
 
@@ -45,11 +44,11 @@ changes has the same hash (`de8b32f4…` above).
 stellar contract fetch --id CCPJRCF3T3HUAH5SR2Q52R3PAGBU5HUB4SNNG2MNSN3HA7TSLAP23PAV --network testnet -o deployed.wasm
 sha256sum deployed.wasm
 
-# local build (toolchain pinned by contracts/rust-toolchain.toml)
-cd contracts && cargo build --target wasm32-unknown-unknown --release && cd ..
+# local build (any build works for the spec; the reproducible one also matches contracts/wasm.sha256)
+scripts/build-wasm.sh
 
 stellar contract info interface --wasm deployed.wasm --output json-formatted > spec-deployed.json
-stellar contract info interface --wasm contracts/target/wasm32-unknown-unknown/release/harmony_organization.wasm --output json-formatted > spec-local.json
+stellar contract info interface --wasm contracts/target/reproducible/wasm32-unknown-unknown/release/harmony_organization.wasm --output json-formatted > spec-local.json
 diff spec-deployed.json spec-local.json && echo "same spec"
 stellar contract info meta --wasm deployed.wasm
 ```

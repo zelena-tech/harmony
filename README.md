@@ -60,11 +60,14 @@ Details: [docs/architecture.md](docs/architecture.md) ·
 ## Quick start
 
 Requirements: Rust (the toolchain is pinned in `contracts/rust-toolchain.toml`),
-Stellar CLI ≥ 22, Node.js ≥ 20.
+Stellar CLI ≥ 22, Node.js ≥ 20, and Docker for the reproducible build.
 
 ```bash
 # Contracts (from the repository root)
-(cd contracts && cargo test && cargo build --target wasm32-unknown-unknown --release)
+(cd contracts && cargo test)
+
+# Reproducible release build, checked against contracts/wasm.sha256
+scripts/build-wasm.sh --check
 
 # Off-chain engine
 (cd packages/core && npm ci && npm test)

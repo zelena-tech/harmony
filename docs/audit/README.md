@@ -25,22 +25,30 @@ Out of scope: see [threat-model.md](threat-model.md#out-of-scope).
 
 ```bash
 # contracts — toolchain pinned to Rust 1.93.1 (same as the testnet deployment)
-cd contracts
-cargo test                                             # 31 tests
-cargo build --target wasm32-unknown-unknown --release
+(cd contracts && cargo test)                           # 31 tests
+
+# reproducible release build (Docker; Linux, macOS or WSL)
+scripts/build-wasm.sh --check                          # compares with contracts/wasm.sha256
 
 # off-chain engine
-cd ../packages/core
+cd packages/core
 npm ci
 npm test                                               # 80 tests, no network
 ```
 
-Expected release hashes (Rust 1.93.1, before optimization):
+Expected release hashes (Rust 1.93.1, before optimization), also in
+[`contracts/wasm.sha256`](../../contracts/wasm.sha256) and checked by CI on
+every push:
 
 ```
-de8b32f4e70a7d060a2985ea58d4f56fe8f79402c92a88692953903670dc0150  harmony_organization.wasm
-7298c292313405cf3b0a39468ad5209345b65daac75e75204148b96720fccbbe  harmony_factory.wasm
+84986a8dc22dd97070c41ceac5b93d5053c70f9af2639e6248ef9c1c1ff86ec7  harmony_organization.wasm
+067820032e0aca19fc0aff311bd488d21655bfa81fd3bffb126e7887cbde0954  harmony_factory.wasm
 ```
+
+A native `cargo build` gives a different hash: the wasm embeds the absolute
+path of the local Cargo registry in the panic messages of soroban-sdk. The
+script builds in a pinned image (`rust:1.93.1-slim-bookworm`, fixed by digest)
+where that path is always `/usr/local/cargo`.
 
 ## Documents
 

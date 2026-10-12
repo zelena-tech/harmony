@@ -15,27 +15,30 @@ jobs:
       run:
         working-directory: contracts
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Toolchain (pinned by rust-toolchain.toml)
         run: rustup show active-toolchain || rustup toolchain install
       - name: Test
-        run: cargo test
-      - name: Build release wasm
-        run: cargo build --target wasm32-unknown-unknown --release
-      - name: Wasm hashes
-        run: sha256sum target/wasm32-unknown-unknown/release/*.wasm
+        run: cargo test --locked
+
+  reproducible-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build in the pinned image and compare with contracts/wasm.sha256
+        run: sh scripts/build-wasm.sh --check
 
   core:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [20, 22]
+        node: [20, 22, 24]
     defaults:
       run:
         working-directory: packages/core
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: npm

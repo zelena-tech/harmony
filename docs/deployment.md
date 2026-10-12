@@ -13,15 +13,22 @@
 ## Contracts
 
 ```bash
-cd contracts
-cargo test                                             # 31 tests, includes one test per finding
-cargo build --target wasm32-unknown-unknown --release
-sha256sum target/wasm32-unknown-unknown/release/*.wasm
-stellar contract optimize --wasm target/wasm32-unknown-unknown/release/harmony_organization.wasm
+(cd contracts && cargo test)                           # 31 tests, includes one test per finding
+
+scripts/build-wasm.sh --check                          # reproducible build, compared with contracts/wasm.sha256
+stellar contract optimize --wasm contracts/target/reproducible/wasm32-unknown-unknown/release/harmony_organization.wasm
+stellar --version                                      # record it next to the optimized hash
 ```
 
+Deploy only the output of `scripts/build-wasm.sh`. A native
+`cargo build --release` embeds the absolute path of the local Cargo registry
+in the wasm, so its hash depends on the machine and cannot be matched by a
+third party. If the source changes, update `contracts/wasm.sha256` in the same
+commit; CI fails otherwise.
+
 On Windows with the GNU toolchain, use `cargo test --lib` (the `cdylib`
-artifact of the host build needs a MinGW linker).
+artifact of the host build needs a MinGW linker). Run `scripts/build-wasm.sh`
+from WSL.
 
 ## Deploying a tenant (testnet)
 
@@ -47,8 +54,9 @@ Testnet USDC Stellar Asset Contract: `CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEI
 1. Fix or explicitly accept every open finding in [audit/findings.md](audit/findings.md),
    at least HMY-01, HMY-10 and HMY-16.
 2. Upgrade soroban-sdk (HMY-11) and use a constructor for initialization.
-3. Build from a tagged commit, record the toolchain and the Stellar CLI
-   version, and publish the wasm hash before deploying.
+3. Build from a tagged commit with `scripts/build-wasm.sh`, record the
+   Stellar CLI version used to optimize, and publish both hashes (reproducible
+   and optimized) before deploying.
 4. Keep the Owner key in a multisig or hardware wallet; the Owner can pause
    claims and sweep unclaimed funds.
 5. After deploying, verify on-chain: `stellar contract fetch --id <id>` and
