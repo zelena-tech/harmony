@@ -1,0 +1,22 @@
+[workspace]
+resolver = "2"
+members  = ["factory", "organization"]
+
+[workspace.dependencies]
+soroban-sdk = "21.7.0"
+
+# Profile de producción — máxima seguridad y mínimo tamaño
+[profile.release]
+opt-level       = "z"      # tamaño mínimo de bytecode
+overflow-checks = true     # panic en overflow aritmético
+debug           = 0
+strip           = "symbols"
+debug-assertions = false
+panic           = "abort"  # no unwinding — falla rápido y seguro
+codegen-units   = 1
+lto             = true     # link-time optimization
+
+# Para pruebas con logs
+[profile.release-with-logs]
+inherits         = "release"
+debug-assertions = true

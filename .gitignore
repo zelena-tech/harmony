@@ -1,0 +1,23 @@
+# Rust / Soroban
+contracts/target/
+**/*.optimized.wasm
+test_snapshots/
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.secret
+*secrets*.json
+.stellar/
+.soroban/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

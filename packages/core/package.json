@@ -1,0 +1,24 @@
+{
+  "name": "@zelena/harmony-core",
+  "version": "0.1.0",
+  "description": "Off-chain engine of Harmony: multi-tenant scoring, payout planning and Stellar/Soroban helpers. No database, no environment variables.",
+  "license": "MIT",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^14.6.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zelena-tech/harmony.git",
+    "directory": "packages/core"
+  }
+}
