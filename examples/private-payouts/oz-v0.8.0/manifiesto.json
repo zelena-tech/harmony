@@ -1,0 +1,22 @@
+{
+  "oz_repo": "https://github.com/OpenZeppelin/stellar-contracts",
+  "oz_tag": "v0.8.0",
+  "oz_commit": "ddc327e",
+  "circuitos": "packages/confidential/circuits compilados con @noir-lang/noir_wasm 1.0.0-beta.11; la VK de cada uno (bb.js 0.87.0, keccak) es identica byte a byte a vks/*.vk.bin",
+  "vks": "copiadas sin cambios de packages/confidential/circuits/vks",
+  "wasm": "examples/confidential/{verifier,auditor,compliant-token} con stellar contract build (stellar-cli 25.2.0, rustc 1.95 wasm32v1-none, soroban-sdk 28.0.0)",
+  "sha256": {
+    "circuitos/register.json": "9a550f151411e0e3c8354e8ddd34927d14a2b4aed717b459bdb2f2b56e00939b",
+    "circuitos/transfer.json": "b92027661fa7f4a0ad8ae88a8696b971b5934f7337ca4a41562457ec1fd9bd94",
+    "circuitos/withdraw.json": "f2e154f97e0bb4f5a4127bf51d640abfb1e6dce57153f18bbec60dd7444d310a",
+    "vks/clawback.vk.bin": "665eb9cf680c89228084647b0d601183f44678c259ed400bd08226024310560b",
+    "vks/register.vk.bin": "f994f89b761fac6905926971ab43a60928e39449dbabe934c32d3e13540c3f51",
+    "vks/set_spender.vk.bin": "8e5fc7db817e6ba1a536f9b1f98bc75e64ce14e35f636d7f05ca22ed7a8fd656",
+    "vks/spender_transfer.vk.bin": "c979e925ba265e207dd0de919dc29577e270bf7f75340a487e0d1b6396394ddc",
+    "vks/transfer.vk.bin": "cd77164631a37072d9ef85413b63f12dbaf7720a7c9069afc07277b02932b963",
+    "vks/withdraw.vk.bin": "9af904154ad8a92861cb2064e499d777ef571a3144636f549263fe8f5a28af74",
+    "wasm/confidential_auditor_example.wasm": "398280583b6bb598f3d569616c76c8e241a0e3c251ac1feeb84488e7acb2042c",
+    "wasm/confidential_compliant_token_example.wasm": "42954cc1236022313c1de3833f71096a056bb91b12047deddbc380e6e9d7a797",
+    "wasm/confidential_verifier_example.wasm": "8c232212bcce900cd15f1b46d84b3ea53788692abdf93e2a8a9a2d6b7bb854f1"
+  }
+}
