@@ -21,3 +21,9 @@ npm-debug.log*
 .idea/
 .DS_Store
 Thumbs.db
+
+# Private payouts example: secret keys and local output (never commit)
+examples/private-payouts/.*-llaves.json
+examples/private-payouts/.pago-privado-keys.json
+examples/private-payouts/salida/
+examples/private-payouts/node_modules/

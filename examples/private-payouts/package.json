@@ -1,0 +1,13 @@
+{
+  "name": "harmony-pago-privado",
+  "private": true,
+  "description": "Pago privado de Harmony con token confidencial de OpenZeppelin en Stellar (demo en testnet y despliegue v0.8.0 listo para mainnet). Herramienta aparte: no es parte de la API del WMS.",
+  "type": "module",
+  "scripts": {
+    "pagar": "node pago-privado.mjs",
+    "desplegar": "node desplegar-y-pagar-mainnet.mjs"
+  },
+  "dependencies": {
+    "stellar-confidential-token-sdk": "0.1.9"
+  }
+}
