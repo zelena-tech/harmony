@@ -1,0 +1,33 @@
+{
+  "title": "Suppliers paid on accepted deliveries",
+  "description": "A manufacturer pays its suppliers for the units it accepted at goods receipt. The CSV is a Spanish-locale export: semicolons, decimal commas, day-first dates.",
+  "organization": "adventure-works-demo",
+  "period": { "label": "November 2026", "since": "2026-11-01", "until": "2026-12-01" },
+  "template": "supplier-deliveries",
+  "overrides": {
+    "payout": { "model": "rate", "rate": 0.8, "budget": 15000 }
+  },
+  "mapping": {
+    "delimiter": ";",
+    "decimal": ",",
+    "participant": "Supplier ID",
+    "name": "Supplier",
+    "date": "Received on",
+    "dateFormat": "DD/MM/YYYY",
+    "ref": "PO",
+    "rules": [
+      { "metric": "unit_accepted", "when": { "column": "Status", "in": ["Accepted", "Partially accepted"] }, "value": { "column": "Units accepted" } },
+      { "metric": "on_time_delivery", "when": [{ "column": "Status", "in": ["Accepted", "Partially accepted"] }, { "column": "On time", "equals": "Yes" }] },
+      { "metric": "rejected_unit", "when": { "column": "Units rejected", "gt": 0 }, "value": { "column": "Units rejected" } }
+    ]
+  },
+  "people": {
+    "SUP-101": { "wallet": "generate" },
+    "SUP-102": { "wallet": "generate" },
+    "SUP-103": { "wallet": "generate" },
+    "SUP-104": { "wallet": "generate" },
+    "SUP-105": { "wallet": null },
+    "SUP-106": { "wallet": "generate" }
+  },
+  "lifetime": { "SUP-101": 30000, "SUP-102": 6000 }
+}

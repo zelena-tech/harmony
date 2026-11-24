@@ -1,0 +1,55 @@
+'use strict';
+
+/**
+ * Concatenates the events of several connector results and, optionally, rewrites
+ * participant ids so one person coming from two systems is one participant.
+ *
+ * Usage: mergeEvents(github, azure) or mergeEvents(github, azure, { identities }).
+ * `identities` maps a source id (GitHub login, email, ...) to a canonical id;
+ * lookup ignores case. Ids missing from the map are kept as they are and listed
+ * in `unmapped` (only when `identities` is given), except an id that is itself
+ * a canonical id (it appears as a VALUE in `identities`): that one is taken as
+ * that canonical person and is listed in `assumedCanonical` instead, so a
+ * collision (two different people whose ids happen to be equal) is visible and
+ * can be reviewed before anybody is paid.
+ *
+ * @param {...object} args connector results, optionally followed by { identities }
+ * @returns {{events: Array, people: Array, unmapped: string[], assumedCanonical: string[]}}
+ */
+function mergeEvents(...args) {
+  let identities = null;
+  const last = args[args.length - 1];
+  if (last && !Array.isArray(last.events) && Object.prototype.hasOwnProperty.call(last, 'identities')) {
+    identities = last.identities;
+    args = args.slice(0, -1);
+  }
+  const map = new Map();
+  if (identities) for (const [k, v] of Object.entries(identities)) map.set(k.toLowerCase(), v);
+  const canonical = new Set();
+  if (identities) for (const v of Object.values(identities)) canonical.add(String(v).toLowerCase());
+  const unmapped = new Set();
+  const assumedCanonical = new Set();
+  const canon = (id) => {
+    if (!identities) return id;
+    const hit = map.get(String(id).toLowerCase());
+    if (hit == null) {
+      if (canonical.has(String(id).toLowerCase())) assumedCanonical.add(id);
+      else unmapped.add(id);
+      return id;
+    }
+    return hit;
+  };
+
+  const events = [];
+  const people = new Map();
+  for (const result of args) {
+    for (const e of (result && result.events) || []) events.push({ ...e, participantId: canon(e.participantId) });
+    for (const p of (result && result.people) || []) {
+      const id = canon(p.participantId);
+      if (!people.has(id)) people.set(id, { ...p, participantId: id });
+    }
+  }
+  return { events, people: [...people.values()], unmapped: [...unmapped].sort(), assumedCanonical: [...assumedCanonical].sort() };
+}
+
+module.exports = { mergeEvents };

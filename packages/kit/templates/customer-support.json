@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "pitch": "Reward support agents for solved tickets weighted by the quality score of the team.",
+    "whoPays": "The contact center or the company that outsources its support",
+    "signals": "Ticket solved, solved at first contact, top satisfaction score, ticket reopened",
+    "idea": "A remote support team in five countries is paid in one transaction, in the same currency, with the same rules."
+  },
+  "program": {
+    "id": "customer-support",
+    "name": "Customer support",
+    "industry": "Services",
+    "unit": "ticket",
+    "description": "Proportional pool; the quality score moves 40% of the points.",
+    "metrics": [
+      {
+        "id": "ticket_solved",
+        "label": "Ticket solved",
+        "points": 5
+      },
+      {
+        "id": "first_contact",
+        "label": "Solved at first contact",
+        "points": 3
+      },
+      {
+        "id": "top_rating",
+        "label": "Top satisfaction score",
+        "points": 4
+      },
+      {
+        "id": "reopened",
+        "label": "Ticket reopened",
+        "points": -5
+      }
+    ],
+    "quality": {
+      "weight": 0.4
+    },
+    "levels": [
+      {
+        "id": "agent",
+        "name": "Agent",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "senior",
+        "name": "Senior",
+        "minLifetimePoints": 2500,
+        "multiplier": 1.05
+      },
+      {
+        "id": "specialist",
+        "name": "Specialist",
+        "minLifetimePoints": 9000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "mentor",
+        "name": "Mentor",
+        "minLifetimePoints": 25000,
+        "multiplier": 1.2
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 300
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.85
+      },
+      {
+        "id": "learning",
+        "label": "Learning budget",
+        "share": 0.15,
+        "rule": {
+          "type": "expires",
+          "afterDays": 45
+        }
+      }
+    ]
+  }
+}

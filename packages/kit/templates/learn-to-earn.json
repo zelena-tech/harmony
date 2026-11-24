@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "pitch": "Learn-to-earn for a course or a bootcamp: students earn a scholarship as they finish lessons and help others.",
+    "whoPays": "A school, a foundation, a sponsor or a company training its future hires",
+    "signals": "Lesson finished, quiz passed, project delivered, review given to a classmate",
+    "idea": "The graduation pocket unlocks on the last day of the course: staying to the end is worth more than starting."
+  },
+  "program": {
+    "id": "learn-to-earn",
+    "name": "Learn to earn",
+    "industry": "Education",
+    "unit": "lesson",
+    "description": "A fixed rate per point with a graduation pocket.",
+    "metrics": [
+      {
+        "id": "lesson",
+        "label": "Lesson finished",
+        "points": 5,
+        "cap": 40
+      },
+      {
+        "id": "quiz_passed",
+        "label": "Quiz passed",
+        "points": 10,
+        "cap": 12
+      },
+      {
+        "id": "project",
+        "label": "Project delivered",
+        "points": 60,
+        "cap": 3
+      },
+      {
+        "id": "peer_review",
+        "label": "Review given to a classmate",
+        "points": 8,
+        "cap": 10
+      }
+    ],
+    "levels": [
+      {
+        "id": "freshman",
+        "name": "Freshman",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "scholar",
+        "name": "Scholar",
+        "minLifetimePoints": 150,
+        "multiplier": 1.05
+      },
+      {
+        "id": "honors",
+        "name": "Honors",
+        "minLifetimePoints": 350,
+        "multiplier": 1.1
+      },
+      {
+        "id": "graduate",
+        "name": "Graduate",
+        "minLifetimePoints": 600,
+        "multiplier": 1.2
+      }
+    ],
+    "payout": {
+      "model": "rate",
+      "rate": 0.1,
+      "budget": 1000
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.5
+      },
+      {
+        "id": "graduation",
+        "label": "Graduation",
+        "share": 0.5,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 90
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 120
+    }
+  }
+}

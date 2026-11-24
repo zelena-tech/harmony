@@ -1,0 +1,62 @@
+Order,Carrier ID,Carrier,Delivered on,Status,POD ref,Days late,Damage,Km
+NW-48113,CAR-03,"Rutas del Sur, Ltda",2026-11-01,Delivered,POD-48113,1,None,115
+NW-48115,CAR-02,Northwind Freight,2026-11-18,Rejected,,,,73
+NW-48117,CAR-02,Northwind Freight,2026-11-05,Delivered,POD-48117,-1,None,137
+NW-48118,CAR-07,Contoso Haulers,2026-11-12,Delivered,POD-48118,0,None,319
+NW-48119,CAR-03,"Rutas del Sur, Ltda",2026-11-05,Rejected,,,,95
+NW-48121,CAR-02,Northwind Freight,2026-11-02,Delivered,POD-48121,0,None,430
+NW-48123,CAR-06,Cargo Lomas,2026-11-25,Delivered,POD-48123,0,None,210
+NW-48223,CAR-02,Northwind Freight,2026-11-09,Delivered,,-1,None,182
+NW-48126,CAR-02,Northwind Freight,2026-11-06,Delivered,POD-48126,0,None,345
+NW-48128,CAR-03,"Rutas del Sur, Ltda",2026-11-14,Delivered,POD-48128,0,None,304
+NW-48130,CAR-08,Tailwind Logistics,2026-11-19,Delivered,POD-48130,2,None,276
+NW-48226,,,2026-11-12,Delivered,POD-48226,0,None,385
+NW-48131,CAR-01,Transportes Aurora,2026-11-01,Delivered,POD-48131,2,None,580
+NW-48133,CAR-02,Northwind Freight,2026-11-12,Delivered,POD-48133,0,Minor,341
+NW-48134,CAR-03,"Rutas del Sur, Ltda",2026-11-02,Delivered,POD-48134,-1,None,396
+NW-48135,CAR-02,Northwind Freight,2026-11-21,Delivered,POD-48135,0,None,85
+NW-48136,CAR-02,Northwind Freight,2026-11-09,Delivered,POD-48136,0,None,206
+NW-48139,CAR-07,Contoso Haulers,2026-11-18,Delivered,POD-48139,0,None,281
+NW-48141,CAR-06,Cargo Lomas,2026-11-20,Delivered,POD-48141,1,None,107
+NW-48144,CAR-06,Cargo Lomas,2026-11-17,Delivered,POD-48144,2,None,444
+NW-48224,CAR-05,Blue Harbor Haulage,2026-11-14,Delivered,,0,None,302
+NW-48145,CAR-02,Northwind Freight,2026-11-25,Delivered,POD-48145,0,None,140
+NW-48146,CAR-02,Northwind Freight,2026-11-17,Rejected,,,,449
+NW-48228,CAR-01,Transportes Aurora,2026-11-31,Delivered,POD-48228,1,Major,362
+NW-48148,CAR-04,Fletes Andinos,2026-11-13,Delivered,POD-48148,0,None,305
+NW-48150,CAR-02,Northwind Freight,2026-11-11,In transit,,,,548
+NW-48153,CAR-03,"Rutas del Sur, Ltda",2026-11-28,Delivered,POD-48153,2,Major,236
+NW-48155,CAR-03,"Rutas del Sur, Ltda",2026-11-16,Delivered,POD-48155,-1,Major,527
+NW-48158,CAR-03,"Rutas del Sur, Ltda",2026-11-08,Delivered,POD-48158,2,None,90
+NW-48160,CAR-04,Fletes Andinos,2026-11-11,Delivered,POD-48160,2,None,225
+
+NW-48163,CAR-04,Fletes Andinos,2026-11-23,Delivered,POD-48163,1,Minor,154
+NW-48231,CAR-03,"Rutas del Sur, Ltda",11/05/2026,Delivered,POD-48231,0,None,303
+NW-48166,CAR-03,"Rutas del Sur, Ltda",2026-11-21,Delivered,POD-48166,1,None,269
+NW-48169,CAR-08,Tailwind Logistics,2026-11-21,Delivered,POD-48169,0,None,418
+NW-48171,CAR-03,"Rutas del Sur, Ltda",2026-11-16,Delivered,POD-48171,0,None,387
+NW-48173,CAR-01,Transportes Aurora,2026-11-03,Delivered,POD-48173,2,Major,385
+NW-48176,CAR-01,Transportes Aurora,2026-11-16,Delivered,POD-48176,0,None,574
+NW-48234,CAR-04,Fletes Andinos,2026-10-29,Delivered,POD-48234,0,Minor,568
+NW-48179,CAR-05,Blue Harbor Haulage,2026-11-19,Delivered,POD-48179,2,Major,420
+NW-48182,CAR-07,Contoso Haulers,2026-11-27,Delivered,POD-48182,0,None,234
+NW-48183,CAR-03,"Rutas del Sur, Ltda",2026-11-24,Delivered,POD-48183,0,Minor,426
+NW-48185,CAR-05,Blue Harbor Haulage,2026-11-06,Delivered,POD-48185,0,Major,374
+NW-48186,CAR-01,Transportes Aurora,2026-11-07,Delivered,POD-48186,-1,None,263
+NW-48189,CAR-04,Fletes Andinos,2026-11-18,Delivered,POD-48189,0,None,293
+NW-48236,CAR-06,Cargo Lomas,2026-12-02,Delivered,POD-48236,-1,None,356
+NW-48191,CAR-01,Transportes Aurora,2026-11-27,Delivered,POD-48191,0,None,426
+NW-48193,CAR-06,Cargo Lomas,2026-11-01,Rejected,,,,216
+NW-48194,CAR-03,"Rutas del Sur, Ltda",2026-11-28,Delivered,POD-48194,-1,None,183
+NW-48237,CAR-02,Northwind Freight,2026-11-20,Delivered,POD-48237,0,None,486,unexpected
+NW-48197,CAR-01,Transportes Aurora,2026-11-24,Delivered,POD-48197,2,None,135
+NW-48200,CAR-01,Transportes Aurora,2026-11-25,In transit,,,,315
+NW-48203,CAR-04,Fletes Andinos,2026-11-12,Delivered,POD-48203,0,None,557
+NW-48205,CAR-06,Cargo Lomas,2026-11-22,Delivered,POD-48205,2,Minor,171
+NW-48208,CAR-02,Northwind Freight,2026-11-01,Rejected,,,,243
+NW-48211,CAR-05,Blue Harbor Haulage,2026-11-15,Delivered,POD-48211,1,None,265
+NW-48213,CAR-04,Fletes Andinos,2026-11-22,Delivered,POD-48213,2,None,527
+NW-48216,CAR-02,Northwind Freight,2026-11-24,Delivered,POD-48216,2,None,333
+NW-48219,CAR-03,"Rutas del Sur, Ltda",2026-11-01,Delivered,POD-48219,0,None,195
+NW-48220,CAR-06,Cargo Lomas,2026-11-27,Delivered,POD-48220,-1,None,319
+NW-48222,CAR-03,"Rutas del Sur, Ltda",2026-11-16,Delivered,POD-48222,0,None,329

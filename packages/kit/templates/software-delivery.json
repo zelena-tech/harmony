@@ -1,0 +1,105 @@
+{
+  "meta": {
+    "pitch": "Pay a software team, an agency or a group of contractors by what was actually delivered: merged work, closed board items and milestones.",
+    "whoPays": "A company, an agency paying contractors, a client paying an integrator per milestone",
+    "signals": "Pull request merged, review done, board item closed (with its effort), bug fixed, milestone reached — read from GitHub and Azure Boards",
+    "idea": "Connect the repository and the board, and the monthly bonus (or the invoice of a contractor) builds itself from the work that was merged and accepted."
+  },
+  "program": {
+    "id": "software-delivery",
+    "name": "Software delivery",
+    "industry": "Technology",
+    "unit": "delivery",
+    "description": "Proportional pool fed by GitHub and Azure Boards, with a pocket released when the milestone is accepted.",
+    "metrics": [
+      {
+        "id": "pr_merged",
+        "label": "Pull request merged",
+        "points": 20,
+        "cap": 60
+      },
+      {
+        "id": "review",
+        "label": "Review done",
+        "points": 8,
+        "cap": 120
+      },
+      {
+        "id": "commit",
+        "label": "Commit on the main branch",
+        "points": 1,
+        "cap": 100
+      },
+      {
+        "id": "item_done",
+        "label": "Board item closed (effort points)",
+        "points": 5,
+        "cap": 200
+      },
+      {
+        "id": "bug_fixed",
+        "label": "Bug fixed",
+        "points": 10,
+        "cap": 30
+      },
+      {
+        "id": "milestone",
+        "label": "Milestone reached",
+        "points": 50
+      }
+    ],
+    "levels": [
+      {
+        "id": "contributor",
+        "name": "Contributor",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "builder",
+        "name": "Builder",
+        "minLifetimePoints": 1000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "senior",
+        "name": "Senior",
+        "minLifetimePoints": 5000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "principal",
+        "name": "Principal",
+        "minLifetimePoints": 15000,
+        "multiplier": 1.2
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 1000
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.7
+      },
+      {
+        "id": "acceptance",
+        "label": "Released on acceptance",
+        "share": 0.3,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 30
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 90
+    }
+  }
+}

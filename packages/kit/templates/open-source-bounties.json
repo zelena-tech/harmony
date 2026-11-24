@@ -1,0 +1,72 @@
+{
+  "meta": {
+    "pitch": "Pay contributors for merged work: code, reviews, documentation and triage, by a public rule.",
+    "whoPays": "A project, a foundation, a DAO or a company that depends on the project",
+    "signals": "Pull request merged, review done, issue triaged, documentation page written",
+    "idea": "A GitHub Action reads the merged pull requests of the month, builds the plan and opens the payment for the treasurer to sign."
+  },
+  "program": {
+    "id": "open-source-bounties",
+    "name": "Open-source contributors",
+    "industry": "Technology",
+    "unit": "contribution",
+    "description": "A monthly pool shared in proportion to merged work.",
+    "metrics": [
+      {
+        "id": "pr_merged",
+        "label": "Pull request merged",
+        "points": 30
+      },
+      {
+        "id": "review",
+        "label": "Review done",
+        "points": 10
+      },
+      {
+        "id": "docs_page",
+        "label": "Documentation page written",
+        "points": 15
+      },
+      {
+        "id": "issue_triaged",
+        "label": "Issue triaged",
+        "points": 3,
+        "cap": 40
+      }
+    ],
+    "levels": [
+      {
+        "id": "contributor",
+        "name": "Contributor",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "regular",
+        "name": "Regular",
+        "minLifetimePoints": 300,
+        "multiplier": 1.1
+      },
+      {
+        "id": "core",
+        "name": "Core",
+        "minLifetimePoints": 1500,
+        "multiplier": 1.2
+      },
+      {
+        "id": "maintainer",
+        "name": "Maintainer",
+        "minLifetimePoints": 5000,
+        "multiplier": 1.35
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 1000
+    },
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 90
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "@zelena/harmony-kit",
+  "version": "0.1.0",
+  "description": "Stellar Harmony kit: turn any team's work into points, levels and pockets, and pay it on Stellar without holding anybody's keys.",
+  "license": "MIT",
+  "main": "src/index.js",
+  "files": [
+    "src",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@zelena/harmony-core": "file:../core"
+  },
+  "keywords": [
+    "stellar",
+    "usdc",
+    "rewards",
+    "incentives",
+    "payouts",
+    "claimable-balances",
+    "non-custodial"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zelena-tech/harmony.git",
+    "directory": "packages/kit"
+  }
+}
