@@ -1,0 +1,70 @@
+{
+  "organization": "acme-software",
+  "period": {
+    "label": "Sprint 12",
+    "since": "2026-11-09",
+    "until": "2026-11-23"
+  },
+  "github": [
+    {
+      "owner": "acme",
+      "repo": "platform",
+      "include": {
+        "reviews": true
+      }
+    }
+  ],
+  "azureBoards": [
+    {
+      "organization": "acme",
+      "project": "Platform"
+    }
+  ],
+  "identities": {
+    "ana-dev": "ana",
+    "ana@example.com": "ana",
+    "ben-codes": "ben",
+    "ben@example.com": "ben",
+    "carla-m": "carla",
+    "carla@example.com": "carla",
+    "dmitri-k": "dmitri",
+    "dmitri@example.com": "dmitri",
+    "eve-ops": "eve",
+    "eve@example.com": "eve"
+  },
+  "people": {
+    "ana": {
+      "name": "Ana",
+      "wallet": "GAYP5GW2ZOJPZ7FIBRWLSHHWU7THPQTSIGQYE5G7XAS3YIE34AAIJEAW"
+    },
+    "ben": {
+      "name": "Ben",
+      "wallet": "GCVJELPHY6K5F3KADZ7AZFBTKZSCDKOGUG3HGFRTFKUS7TJ2NJWXBAEX"
+    },
+    "carla": {
+      "name": "Carla",
+      "wallet": "GCLRGXCOJTZO5NTZ4EK3VNQOL4YZAQROFZZ3IRQCAWNPTYNHQ5QPUO6R"
+    },
+    "dmitri": {
+      "name": "Dmitri",
+      "wallet": "GCRCAITJ7YMS6P2KMJAVWHB25N4GJ4KMSMB7QIFJGNVZ7WCRW5GRYCRG"
+    },
+    "eve": {
+      "name": "Eve",
+      "wallet": null
+    }
+  },
+  "milestones": {
+    "creditEveryone": true
+  },
+  "program": {
+    "payout": {
+      "model": "proportional",
+      "pool": 1000
+    }
+  },
+  "lifetime": {
+    "ana": 1200,
+    "dmitri": 5200
+  }
+}
