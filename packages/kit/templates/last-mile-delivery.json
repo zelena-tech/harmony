@@ -1,0 +1,96 @@
+{
+  "meta": {
+    "pitch": "A per-delivery reward for couriers, with a bonus for arriving on time and for five-star ratings.",
+    "whoPays": "The delivery company, a marketplace or a merchant",
+    "signals": "Delivery completed, delivered on time, five-star rating, failed delivery",
+    "idea": "Couriers are paid the same night in USDC, even before they have opened a wallet: the money waits for them."
+  },
+  "program": {
+    "id": "last-mile-delivery",
+    "name": "Last-mile delivery",
+    "industry": "Delivery",
+    "unit": "delivery",
+    "description": "A rate per point, limited by a budget for the period.",
+    "metrics": [
+      {
+        "id": "delivery",
+        "label": "Delivery completed",
+        "points": 10
+      },
+      {
+        "id": "on_time",
+        "label": "Delivered on time",
+        "points": 4
+      },
+      {
+        "id": "five_star",
+        "label": "Five-star rating",
+        "points": 3
+      },
+      {
+        "id": "failed_delivery",
+        "label": "Failed delivery",
+        "points": -8
+      }
+    ],
+    "levels": [
+      {
+        "id": "rookie",
+        "name": "Rookie",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "rider",
+        "name": "Rider",
+        "minLifetimePoints": 1500,
+        "multiplier": 1.05
+      },
+      {
+        "id": "pro",
+        "name": "Pro",
+        "minLifetimePoints": 6000,
+        "multiplier": 1.12
+      },
+      {
+        "id": "legend",
+        "name": "Legend",
+        "minLifetimePoints": 18000,
+        "multiplier": 1.25
+      }
+    ],
+    "payout": {
+      "model": "rate",
+      "rate": 0.02,
+      "budget": 500
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.75
+      },
+      {
+        "id": "streak",
+        "label": "Streak bonus",
+        "share": 0.1,
+        "rule": {
+          "type": "expires",
+          "afterDays": 14
+        }
+      },
+      {
+        "id": "savings",
+        "label": "Rainy-day fund",
+        "share": 0.15,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 60
+        }
+      }
+    ]
+  }
+}

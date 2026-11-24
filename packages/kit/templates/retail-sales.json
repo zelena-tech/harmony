@@ -1,0 +1,89 @@
+{
+  "meta": {
+    "pitch": "A monthly commission pool for the shop floor: sales, add-ons and new customers, minus returns.",
+    "whoPays": "The retailer or a brand running a sell-out campaign",
+    "signals": "Units sold, add-on sold, new customer registered, product returned",
+    "idea": "A brand funds a campaign across fifty independent shops and every seller is paid directly, with a public proof."
+  },
+  "program": {
+    "id": "retail-sales",
+    "name": "Retail sales floor",
+    "industry": "Retail",
+    "unit": "sale",
+    "description": "Pool shared among the top sellers; everybody who qualifies gets a base.",
+    "metrics": [
+      {
+        "id": "sale",
+        "label": "Unit sold",
+        "points": 5
+      },
+      {
+        "id": "add_on",
+        "label": "Add-on sold",
+        "points": 8
+      },
+      {
+        "id": "new_customer",
+        "label": "New customer registered",
+        "points": 12
+      },
+      {
+        "id": "return",
+        "label": "Product returned",
+        "points": -6
+      }
+    ],
+    "minPoints": 50,
+    "levels": [
+      {
+        "id": "bronze",
+        "name": "Bronze",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "silver",
+        "name": "Silver",
+        "minLifetimePoints": 3000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "gold",
+        "name": "Gold",
+        "minLifetimePoints": 10000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "platinum",
+        "name": "Platinum",
+        "minLifetimePoints": 30000,
+        "multiplier": 1.2
+      }
+    ],
+    "payout": {
+      "model": "topN",
+      "pool": 400,
+      "topN": 10,
+      "base": 10
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.9
+      },
+      {
+        "id": "year-end",
+        "label": "Year-end bonus",
+        "share": 0.1,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 90
+        }
+      }
+    ]
+  }
+}

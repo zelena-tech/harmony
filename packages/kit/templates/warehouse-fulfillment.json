@@ -1,0 +1,91 @@
+{
+  "meta": {
+    "pitch": "Pay pickers and packers a weekly bonus from the orders the warehouse system already records.",
+    "whoPays": "The warehouse operator or the brand that hires it",
+    "signals": "Order picked, order packed, inventory line counted, error reported by quality control",
+    "idea": "Plug it into any WMS or even a spreadsheet export: the team sees a live ranking and gets USDC every Friday."
+  },
+  "program": {
+    "id": "warehouse-fulfillment",
+    "name": "Warehouse fulfillment",
+    "industry": "Logistics",
+    "unit": "order",
+    "description": "Bonus pool shared among the best pickers and packers of the period.",
+    "metrics": [
+      {
+        "id": "order_picked",
+        "label": "Order picked",
+        "points": 10
+      },
+      {
+        "id": "order_packed",
+        "label": "Order packed",
+        "points": 10
+      },
+      {
+        "id": "line_counted",
+        "label": "Inventory line counted",
+        "points": 1
+      },
+      {
+        "id": "picking_error",
+        "label": "Picking error found by quality control",
+        "points": -25
+      }
+    ],
+    "quality": {
+      "weight": 0.3
+    },
+    "levels": [
+      {
+        "id": "starter",
+        "name": "Starter",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "skilled",
+        "name": "Skilled",
+        "minLifetimePoints": 2000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "expert",
+        "name": "Expert",
+        "minLifetimePoints": 8000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "master",
+        "name": "Master",
+        "minLifetimePoints": 20000,
+        "multiplier": 1.2
+      }
+    ],
+    "payout": {
+      "model": "topN",
+      "pool": 150,
+      "topN": 5,
+      "base": 5
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.8
+      },
+      {
+        "id": "savings",
+        "label": "Savings",
+        "share": 0.2,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 30
+        }
+      }
+    ]
+  }
+}

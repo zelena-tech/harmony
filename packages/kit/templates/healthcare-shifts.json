@@ -1,0 +1,87 @@
+{
+  "meta": {
+    "pitch": "Recognize the shifts nobody wants: nights, weekends and clean handovers, with a wellbeing pocket.",
+    "whoPays": "The clinic, the laboratory or the staffing agency",
+    "signals": "Shift completed, night or weekend shift, handover on time, training module passed",
+    "idea": "Staff from three clinics are in one program; each clinic funds its own pool and nobody shares payroll data."
+  },
+  "program": {
+    "id": "healthcare-shifts",
+    "name": "Healthcare shifts",
+    "industry": "Health",
+    "unit": "shift",
+    "description": "Proportional pool across the people who covered the period.",
+    "metrics": [
+      {
+        "id": "shift",
+        "label": "Shift completed",
+        "points": 10
+      },
+      {
+        "id": "hard_shift",
+        "label": "Night or weekend shift",
+        "points": 6
+      },
+      {
+        "id": "handover_on_time",
+        "label": "Handover on time",
+        "points": 2
+      },
+      {
+        "id": "training",
+        "label": "Training module passed",
+        "points": 15,
+        "cap": 4
+      }
+    ],
+    "levels": [
+      {
+        "id": "associate",
+        "name": "Associate",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "practitioner",
+        "name": "Practitioner",
+        "minLifetimePoints": 2000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "senior",
+        "name": "Senior",
+        "minLifetimePoints": 8000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "lead",
+        "name": "Lead",
+        "minLifetimePoints": 22000,
+        "multiplier": 1.15
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 500
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.8
+      },
+      {
+        "id": "wellbeing",
+        "label": "Wellbeing",
+        "share": 0.2,
+        "rule": {
+          "type": "expires",
+          "afterDays": 60
+        }
+      }
+    ]
+  }
+}

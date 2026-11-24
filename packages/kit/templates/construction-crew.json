@@ -1,0 +1,88 @@
+{
+  "meta": {
+    "pitch": "A crew bonus that rewards finished tasks and safety, with part of it saved until the project is handed over.",
+    "whoPays": "The contractor or the project owner",
+    "signals": "Task finished and approved, safety check done, day without incidents, rework",
+    "idea": "The hand-over pocket unlocks on the delivery date: the crew can see, on a public ledger, that the money is already there."
+  },
+  "program": {
+    "id": "construction-crew",
+    "name": "Construction crew",
+    "industry": "Construction",
+    "unit": "task",
+    "description": "Proportional pool with a hand-over pocket that unlocks later.",
+    "metrics": [
+      {
+        "id": "task_approved",
+        "label": "Task finished and approved",
+        "points": 20
+      },
+      {
+        "id": "safety_check",
+        "label": "Safety check done",
+        "points": 5,
+        "cap": 30
+      },
+      {
+        "id": "clean_day",
+        "label": "Day without incidents",
+        "points": 3,
+        "cap": 31
+      },
+      {
+        "id": "rework",
+        "label": "Rework",
+        "points": -15
+      }
+    ],
+    "levels": [
+      {
+        "id": "helper",
+        "name": "Helper",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "journeyman",
+        "name": "Journeyman",
+        "minLifetimePoints": 3000,
+        "multiplier": 1.1
+      },
+      {
+        "id": "foreman",
+        "name": "Foreman",
+        "minLifetimePoints": 12000,
+        "multiplier": 1.2
+      },
+      {
+        "id": "master-builder",
+        "name": "Master builder",
+        "minLifetimePoints": 30000,
+        "multiplier": 1.3
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 600
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.6
+      },
+      {
+        "id": "handover",
+        "label": "Hand-over bonus",
+        "share": 0.4,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 90
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "meta": {
+    "pitch": "Piece-rate pay for harvest crews, settled every day, for people who may not have a bank account.",
+    "whoPays": "The farm, the cooperative or the buyer that wants a traceable supply chain",
+    "signals": "Kilograms harvested, first-grade kilograms, day attended",
+    "idea": "A picker who has never used a wallet is paid today; the money waits on the ledger until they claim it, with one signature."
+  },
+  "program": {
+    "id": "harvest-piece-rate",
+    "name": "Harvest piece rate",
+    "industry": "Agriculture",
+    "unit": "kilogram",
+    "description": "A rate per point with a season-end pocket.",
+    "metrics": [
+      {
+        "id": "kg",
+        "label": "Kilogram harvested",
+        "points": 1
+      },
+      {
+        "id": "kg_first_grade",
+        "label": "First-grade kilogram",
+        "points": 0.5
+      },
+      {
+        "id": "day_attended",
+        "label": "Day attended",
+        "points": 20,
+        "cap": 31
+      }
+    ],
+    "levels": [
+      {
+        "id": "seasonal",
+        "name": "Seasonal",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "returning",
+        "name": "Returning",
+        "minLifetimePoints": 5000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "crew-lead",
+        "name": "Crew lead",
+        "minLifetimePoints": 20000,
+        "multiplier": 1.15
+      }
+    ],
+    "payout": {
+      "model": "rate",
+      "rate": 0.03,
+      "budget": 2000
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Available now",
+        "rule": {
+          "type": "instant"
+        },
+        "share": 0.85
+      },
+      {
+        "id": "season-end",
+        "label": "Season-end bonus",
+        "share": 0.15,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 45
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 180
+    }
+  }
+}

@@ -45,3 +45,29 @@ jobs:
           cache-dependency-path: packages/core/package-lock.json
       - run: npm ci
       - run: npm test
+
+  kit:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: |
+            packages/core/package-lock.json
+            packages/kit/package-lock.json
+      # The kit depends on the engine through a local link (file:../core), so the
+      # engine's own dependencies must be installed first.
+      - name: Install the engine
+        working-directory: packages/core
+        run: npm ci
+      - name: Install the kit
+        working-directory: packages/kit
+        run: npm ci
+      - name: Test
+        working-directory: packages/kit
+        run: npm test

@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "pitch": "A tip pool everybody can audit: shared by hours worked, paid the same night.",
+    "whoPays": "The restaurant, the hotel or the event organizer (with the tips customers left)",
+    "signals": "Hours worked, closing shift, customer mention",
+    "idea": "Tips paid by card reach the kitchen and the floor in minutes, and anybody on the team can check the split."
+  },
+  "program": {
+    "id": "tip-pool",
+    "name": "Shared tip pool",
+    "industry": "Hospitality",
+    "unit": "hour",
+    "description": "The pool of the night, shared in proportion to hours and extras.",
+    "metrics": [
+      {
+        "id": "hour",
+        "label": "Hour worked",
+        "points": 10,
+        "cap": 14
+      },
+      {
+        "id": "closing",
+        "label": "Closing shift",
+        "points": 15,
+        "cap": 1
+      },
+      {
+        "id": "mention",
+        "label": "Customer mention",
+        "points": 5,
+        "cap": 5
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 200
+    }
+  }
+}
