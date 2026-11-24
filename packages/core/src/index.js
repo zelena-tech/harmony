@@ -1,5 +1,6 @@
 'use strict';
 
+const sdk = require('@stellar/stellar-sdk');
 const { defineTenant, DEFAULTS } = require('./tenant');
 const { HarmonyError, TenantConfigError } = require('./errors');
 const networks = require('./stellar/networks');
@@ -44,4 +45,8 @@ module.exports = {
   computePeriod,
   payouts: { ...plan, ...transactions },
   soroban: organization,
+  // The exact SDK instance the engine uses. Packages built on top of the engine
+  // (and hosts that parse XDR themselves) should take it from here so that
+  // Asset, Transaction and Claimant objects are never mixed between two copies.
+  sdk,
 };
