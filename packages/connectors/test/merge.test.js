@@ -1,0 +1,42 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const { mergeEvents } = require('../src');
+
+const gh = {
+  events: [{ participantId: 'ana-dev', metric: 'pr_merged', value: 1 }, { participantId: 'ben-dev', metric: 'commit', value: 1 }],
+  people: [{ participantId: 'ana-dev', name: 'ana-dev', url: 'https://github.com/ana-dev' }],
+};
+const az = {
+  events: [{ participantId: 'ana@example.com', metric: 'item_done', value: 5 }, { participantId: 'cai@example.com', metric: 'bug_fixed', value: 1 }],
+  people: [{ participantId: 'ana@example.com', name: 'Ana Demo' }],
+};
+
+test('without identities it just concatenates and leaves ids untouched', () => {
+  const r = mergeEvents(gh, az);
+  assert.equal(r.events.length, 4);
+  assert.deepEqual(r.events.map((e) => e.participantId), ['ana-dev', 'ben-dev', 'ana@example.com', 'cai@example.com']);
+  assert.deepEqual(r.unmapped, []);
+  assert.equal(r.people.length, 2);
+});
+
+test('with identities the same person from two systems becomes one participant', () => {
+  const r = mergeEvents(gh, az, { identities: { 'ana-dev': 'ana', 'Ana@Example.com': 'ana', 'ben-dev': 'ben' } });
+  assert.deepEqual(r.events.map((e) => e.participantId), ['ana', 'ben', 'ana', 'cai@example.com']);
+  assert.deepEqual(r.unmapped, ['cai@example.com']);
+  assert.deepEqual(r.people.map((p) => p.participantId), ['ana']); // first seen wins; unmapped ids without a person row are not invented
+  assert.equal(r.people[0].name, 'ana-dev');
+});
+
+test('inputs are not mutated and extra event fields survive', () => {
+  const input = { events: [{ participantId: 'ana-dev', metric: 'commit', value: 1, ref: 'r', at: 'a' }], people: [] };
+  const r = mergeEvents(input, { identities: { 'ana-dev': 'ana' } });
+  assert.equal(input.events[0].participantId, 'ana-dev');
+  assert.deepEqual(r.events[0], { participantId: 'ana', metric: 'commit', value: 1, ref: 'r', at: 'a' });
+});
+
+test('empty and missing results are tolerated', () => {
+  assert.deepEqual(mergeEvents(), { events: [], people: [], unmapped: [] });
+  assert.deepEqual(mergeEvents({}, null).events, []);
+});

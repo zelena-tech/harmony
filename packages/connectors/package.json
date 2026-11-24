@@ -1,0 +1,21 @@
+{
+  "name": "@zelena/harmony-connectors",
+  "version": "0.1.0",
+  "description": "Turns GitHub and Azure Boards activity into plain Harmony events ({ participantId, metric, value }). Zero dependencies, no environment variables.",
+  "license": "MIT",
+  "main": "src/index.js",
+  "files": [
+    "src"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zelena-tech/harmony.git",
+    "directory": "packages/connectors"
+  }
+}
