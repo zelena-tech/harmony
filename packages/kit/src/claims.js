@@ -51,10 +51,12 @@ function predicateWindow(pred) {
  * @param {string} input.wallet
  * @param {number} [input.now]       unix seconds
  * @param {number} [input.maxPages=10] pages of 200 to read at most
+ * @param {Array|Set} [input.sponsors] payer accounts: when given, only balances created by one of them are returned
+ *        (anybody can create a claimable balance that names you as claimant; this keeps the list to your payers)
  * @param {object} [input.horizon]   injectable
  * @returns {Promise<Array<{balanceId: string, amount: string, sponsor: string, claimableNow: boolean, from: number|null, until: number|null}> & {truncated: boolean}>}
  */
-async function listClaimable(tenant, { wallet, now = Math.floor(Date.now() / 1000), maxPages = 10, horizon }) {
+async function listClaimable(tenant, { wallet, now = Math.floor(Date.now() / 1000), maxPages = 10, sponsors, horizon }) {
   if (!networks.isAccountId(wallet)) throw new HarmonyError(400, 'The wallet is not a Stellar account (G + 55 chars).');
   const h = horizon || new sdk.Horizon.Server(tenant.horizonUrl);
   const asset = payouts.rewardAsset(tenant);
@@ -71,7 +73,8 @@ async function listClaimable(tenant, { wallet, now = Math.floor(Date.now() / 100
     page = await page.next();
     pages += 1;
   }
-  const out = records.map((r) => {
+  const trusted = sponsors === undefined || sponsors === null ? null : new Set(sponsors);
+  const out = records.filter((r) => !trusted || trusted.has(r.sponsor)).map((r) => {
     const mine = (r.claimants || []).find((c) => c.destination === wallet);
     const window = predicateWindow(mine && mine.predicate);
     return {

@@ -47,7 +47,7 @@ const elapsed = () => `${Math.round((Date.now() - started) / 1000)}s`;
 
 function stage(n, title) {
   log();
-  log(`=== STAGE ${n}/8  ${title}  [${elapsed()}]`);
+  log(`=== STAGE ${n}/9  ${title}  [${elapsed()}]`);
 }
 
 class Unreachable extends Error {}
@@ -230,8 +230,28 @@ async function main() {
   const found = await Promise.all(claimableOps.map((o) => retry('balance', () => server.claimableBalances().claimableBalance(o.balanceId).call().then(() => true, (e) => { if (e.response && e.response.status === 404) return false; throw e; }))));
   note(`check: ${found.filter(Boolean).length}/${claimableOps.length} balance ids predicted by build() exist on the network  ${found.every(Boolean) ? 'OK' : 'MISMATCH'}`);
 
-  // ── 5. C claims everything claimable now, with one transaction ─────────────
-  stage(5, `${C.name} (C) claims everything that is claimable now, with ONE signature`);
+  // ── 5. the same plan cannot be built (and paid) again ──────────────────────
+  stage(5, 'The same plan cannot be paid twice');
+  let refusedRebuild = null;
+  for (let attempt = 1; attempt <= 4 && !refusedRebuild; attempt++) {
+    try { await retry('rebuild', () => harmony.build({ plan, payer: payer.publicKey() })); } catch (e) {
+      if (!(e instanceof HarmonyError)) throw e;
+      refusedRebuild = e;
+    }
+    if (!refusedRebuild) { note(`(Horizon has not listed the payment yet; looking again ${attempt}/4)`); await sleep(2000); }
+  }
+  if (!refusedRebuild || refusedRebuild.code !== 'PLAN_ALREADY_SUBMITTED') {
+    throw new Error(`Expected build() to refuse the same plan with PLAN_ALREADY_SUBMITTED, got: ${refusedRebuild ? `${refusedRebuild.code} ${refusedRebuild.message}` : 'a successful build'}`);
+  }
+  note(`EXPECTED OUTCOME: build() refused the same plan (HTTP ${refusedRebuild.statusCode}, ${refusedRebuild.code}).`);
+  note(`It read the payer's latest transactions on Horizon and found ${refusedRebuild.hashes.length} with this plan id as memo:`);
+  refusedRebuild.hashes.forEach((h) => note(`  ${txUrl(h)}`));
+  const sameHashes = refusedRebuild.hashes.length === payoutHashes.length && payoutHashes.every((h) => refusedRebuild.hashes.includes(h));
+  note(`check: they are exactly the ${payoutHashes.length} transaction(s) of the payout  ${sameHashes ? 'OK' : 'DIFFERENT'}`);
+  summary.payout.rebuildRefused = { code: refusedRebuild.code, statusCode: refusedRebuild.statusCode, hashes: refusedRebuild.hashes };
+
+  // ── 6. C claims everything claimable now, with one transaction ─────────────
+  stage(6, `${C.name} (C) claims everything that is claimable now, with ONE signature`);
   const cList = await retry('claimable C', () => harmony.listClaimable({ wallet: C.keypair.publicKey() }));
   note(`${cList.length} balances wait for ${C.name}:`);
   cList.forEach((b) => note(`  ${rpad(b.amount, 12)}  ${b.claimableNow ? 'claimable now' : `locked until ${iso(b.from)}`}   ${b.balanceId.slice(0, 16)}...`));
@@ -251,7 +271,7 @@ async function main() {
   summary.claims.personC = { hashes: cReceipt.transactions.map((t) => t.hash), claimed: cNow, addedTrustline: cClaim.addsTrustline, balanceAfter: cAfter.amount };
 
   // ── 6. the time lock, enforced by the network ──────────────────────────────
-  stage(6, 'The time lock, proven on the network');
+  stage(7, 'The time lock, proven on the network');
   let unlockProof = null;
   if (!hasUnlocks) note('This template has no "unlocks" pocket: stage skipped.');
   else {
@@ -295,18 +315,24 @@ async function main() {
   }
 
   // ── 7. D: money waiting for an account that does not exist ─────────────────
-  stage(7, `${D.name} (D): money waiting for an account that does not exist yet`);
+  stage(8, `${D.name} (D): money waiting for an account that does not exist yet`);
   const dList = await retry('claimable D', () => harmony.listClaimable({ wallet: D.keypair.publicKey() }));
   dList.forEach((b) => note(`${rpad(b.amount, 12)} ${ASSET_CODE}  ${b.from !== null ? `from ${iso(b.from)}` : b.until !== null ? `until ${iso(b.until)}` : 'any time'}   ${b.balanceId.slice(0, 16)}...`));
   try { await harmony.buildClaim({ wallet: D.keypair.publicKey(), balanceIds: dList.map((b) => b.balanceId) }); } catch (e) {
     if (!(e instanceof HarmonyError)) throw e;
     note(`${D.name} cannot claim yet (${e.code}): ${e.message}`);
   }
-  note(`The payer can take this back only after ${iso(plan.createdAt + program.unreachable.reclaimAfterSeconds)}.`);
+  const dOps = built.operations.filter((o) => o.participantId === D.id);
+  for (const o of dOps.filter((x) => x.kind === 'unlocks')) {
+    const rec = await retry('balance of D', () => server.claimableBalances().claimableBalance(o.balanceId).call());
+    const payerClaimant = rec.claimants.find((c) => c.destination === payer.publicKey());
+    note(`pocket "${o.pocketId}" (unlocks) of ${D.name}: ${rec.claimants.length} claimants on the network; payer can take it back from ${o.payerCanReclaimFrom ? iso(o.payerCanReclaimFrom) : 'never'}  ${payerClaimant ? 'OK: not locked forever' : 'UNEXPECTED: no payer claimant'}`);
+  }
+  note(`The payer can take the held money back only after ${iso(plan.createdAt + program.unreachable.reclaimAfterSeconds)}.`);
   summary.claims.personD = { waiting: dList.map((b) => ({ balanceId: b.balanceId, amount: b.amount })) };
 
   // ── 8. cards and summary ───────────────────────────────────────────────────
-  stage(8, 'Harmony Cards and summary');
+  stage(9, 'Harmony Cards and summary');
   fs.mkdirSync(OUT_DIR, { recursive: true });
   for (const pay of plan.payments) {
     const person = roster.find((r) => r.participantId === pay.participantId);

@@ -26,10 +26,12 @@ const THREE_POCKETS = [
   { id: 'later', label: 'Later', share: 0.2, rule: { type: 'unlocks', afterDays: 60 } },
 ];
 
+const SALT = '0123456789abcdef0123456789abcdef'; // a fixed salt makes plan ids reproducible
+
 function run(program, points, { t = tenant(), people, planInput = {} } = {}) {
   const { standings } = scoreOf(program, points);
   const who = people || peopleOf(Object.keys(points));
-  return { plan: kit.plan(program, t, { standings, people: who, now: NOW, ...planInput }), standings, people: who, tenant: t };
+  return { plan: kit.plan(program, t, { standings, people: who, now: NOW, salt: SALT, ...planInput }), standings, people: who, tenant: t };
 }
 
 test('proportional: the whole pool is shared by points, to the stroop', () => {
@@ -261,7 +263,7 @@ test('the tenant caps are enforced when planning', () => {
   assert.equal(run(simpleProgram(), { a: 50, b: 30, c: 20 }, { t: fine }).plan.total, '100.0000000');
 });
 
-test('planId is deterministic and changes when anything that is paid changes', () => {
+test('planId is deterministic for the same salt and changes when anything that is paid changes', () => {
   const people = peopleOf(['a', 'b']);
   const first = run(simpleProgram(), { a: 60, b: 40 }, { people }).plan;
   const same = run(simpleProgram(), { a: 60, b: 40 }, { people }).plan;
@@ -329,4 +331,65 @@ test('the plan holds no secret and only strings for money', () => {
   }
   assert.equal(typeof plan.total, 'string');
   assert.doesNotMatch(JSON.stringify(plan), /S[A-Z2-7]{55}/);
+});
+
+test('E: the plan has a random salt; the id depends on it', () => {
+  const people = peopleOf(['a', 'b']);
+  const random = (n) => run(simpleProgram(), { a: 60, b: 40 }, { people, planInput: { salt: undefined } }).plan;
+  const [x, y] = [random(), random()];
+  assert.match(x.salt, /^[0-9a-f]{32}$/);
+  assert.notEqual(x.salt, y.salt);
+  assert.notEqual(x.planId, y.planId, 'the same data with another salt is another id');
+  kit.assertPlanIntegrity(x);
+
+  const same = (salt) => run(simpleProgram(), { a: 60, b: 40 }, { people, planInput: { salt } }).plan;
+  assert.equal(same(SALT).planId, same(SALT).planId);
+  assert.notEqual(same(SALT).planId, same('f'.repeat(32)).planId);
+  // The salt is part of what the id covers: swapping it without recomputing the id is detected.
+  const tampered = { ...same(SALT), salt: 'f'.repeat(32) };
+  assert.throws(() => kit.assertPlanIntegrity(tampered), (e) => e.code === 'PLAN_ALTERED');
+  for (const bad of ['', 'abc', 'G'.repeat(32), 'A'.repeat(32), 5]) {
+    assert.throws(() => same(bad), (e) => e.statusCode === 400, String(bad));
+  }
+});
+
+test('D: duplicate participant ids in the standings are refused', () => {
+  const { standings } = scoreOf(simpleProgram(), { a: 50, b: 50 });
+  const people = peopleOf(['a', 'b']);
+  assert.throws(() => kit.plan(simpleProgram(), tenant(), { standings: [...standings, standings[0]], people, now: NOW }),
+    (e) => e.statusCode === 400 && e.code === 'DUPLICATE_PARTICIPANT');
+  // A number and its string are the same participant.
+  const asNumber = [{ ...standings[0], participantId: 1 }, { ...standings[1], participantId: '1' }];
+  assert.throws(() => kit.plan(simpleProgram(), tenant(), { standings: asNumber, people: { 1: { name: 'x', wallet: wallet() } }, now: NOW }), (e) => e.code === 'DUPLICATE_PARTICIPANT');
+});
+
+test('D: two different participants with the same wallet are refused unless allowSharedWallets', () => {
+  const { standings } = scoreOf(simpleProgram(), { a: 50, b: 30, c: 20 });
+  const shared = wallet();
+  const people = { a: { name: 'A', wallet: shared }, b: { name: 'B', wallet: shared }, c: { name: 'C', wallet: wallet() } };
+  const plan = (options) => kit.plan(simpleProgram(), tenant(), { standings, people, now: NOW, ...(options ? { options } : {}) });
+  assert.throws(() => plan(), (e) => e.statusCode === 409 && e.code === 'SHARED_WALLET');
+  assert.throws(() => plan({ allowSharedWallets: 'yes' }), (e) => e.code === 'SHARED_WALLET', 'only true allows it');
+  assert.equal(plan({ allowSharedWallets: true }).payments.length, 3);
+  // Somebody who did not qualify does not count.
+  const { standings: some } = scoreOf(simpleProgram({ minPoints: 40 }), { a: 50, b: 30, c: 60 });
+  assert.equal(kit.plan(simpleProgram({ minPoints: 40 }), tenant(), { standings: some, people, now: NOW }).payments.length, 2);
+});
+
+test('D: a pool so small that the shares round up past it is refused (proportional and rate)', () => {
+  const points = {};
+  for (let i = 0; i < 3000; i++) points[`p${i}`] = 1;
+  const small = simpleProgram({ payout: { model: 'proportional', pool: 0.0011 } });
+  const { standings } = scoreOf(small, points);
+  const people = peopleOf(Object.keys(points));
+  assert.throws(() => kit.plan(small, tenant(), { standings, people, now: NOW }), (e) => e.statusCode === 409 && e.code === 'POOL_TOO_SMALL');
+
+  // The same through the rate model: due = points x rate, 3000 x 0.00000036667
+  const rate = simpleProgram({ payout: { model: 'rate', rate: 0.00000036667 } });
+  const r = scoreOf(rate, points);
+  assert.throws(() => kit.plan(rate, tenant(), { standings: r.standings, people, now: NOW, options: { budget: 0.0011 } }), (e) => e.code === 'POOL_TOO_SMALL');
+
+  // A pool that shares evenly is fine, and so is the whole existing range of ordinary pools.
+  const fine = simpleProgram({ payout: { model: 'proportional', pool: 100 } });
+  assert.equal(kit.plan(fine, tenant(), { standings: scoreOf(fine, points).standings, people, now: NOW }).total, '100.0000000');
 });

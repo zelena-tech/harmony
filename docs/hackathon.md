@@ -62,7 +62,9 @@ const harmony = createProgram({
 const { standings } = harmony.score({ events });            // [{ participantId, metric, value }]
 const plan = harmony.plan({ standings, people });           // people: { id: { name, wallet } }
 const built = await harmony.build({ plan, payer });         // unsigned XDR, payer is a G... address
-// Keep built.hashes on your server. Send built.xdrs to the payer's wallet to sign.
+// Keep plan, built and built.hashes on your server. Send built.xdrs to the payer's wallet to sign.
+// Mark the plan as submitted when you sign. If submit() says SUBMISSION_UNKNOWN, resubmit the
+// SAME signed transactions and never build the plan again (see kit.md, "After you sign").
 const receipt = await harmony.submit({ built, signedXdrs });
 const card = harmony.card({ participant: { participantId: 'ana', name: 'Ana' },
   standing: standings[0], of: standings.length, payment: plan.payments[0], receipt });
@@ -118,7 +120,8 @@ produced, and rejects any operation that is not a payment or claimable balance
 of the reward asset to a wallet in the plan.
 
 **What is on-chain?** Payments and claimable balances of the reward asset, the
-claims, and a memo with the plan id (a hash). Points, standings and the source
+claims, and a memo with the plan id (a salted hash, so the participant ids behind
+it cannot be guessed from it). Points, standings and the source
 events stay off-chain, with you. Amounts and addresses are public on a public
 network. The privacy example in `examples/private-payouts` hides amounts, but it
 is a separate example.

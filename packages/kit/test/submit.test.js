@@ -120,11 +120,12 @@ test('when the network rejects the second transaction the first is reported as s
   assert.equal(h.submitted.length, 1, 'nothing after the failure is attempted');
 });
 
-test('a failure without result codes still reports the reason', async () => {
+test('a failure without result codes is an UNKNOWN outcome (504), not a rejection', async () => {
   const s = await built();
   const h = { submitTransaction: async () => { throw new Error('socket hang up'); } };
   await assert.rejects(submit(s.tenant, { built: s.built, signedXdrs: s.signed, horizon: h }),
-    (e) => e.statusCode === 502 && /socket hang up/.test(e.message) && e.resultCodes === null && e.submitted.length === 0);
+    (e) => e.statusCode === 504 && e.code === 'SUBMISSION_UNKNOWN' && /socket hang up/.test(e.message) && /SAME signed transactions/.test(e.message)
+      && e.unknownHash === s.built.hashes[0] && e.submitted.length === 0 && e.resultCodes === undefined);
 });
 
 test('an unsigned built transaction is refused', async () => {
@@ -229,8 +230,10 @@ test('validateOperations: the payer can never take the money back while the pers
   invalid(signedTx([claimable([new C(R, before(T)), new C(P, notBefore(T - 1))])]), 'UNEXPECTED_PREDICATE');
   // payer "before" instead of "not before"
   invalid(signedTx([claimable([new C(R, before(T)), new C(P, before(T))])]), 'UNEXPECTED_PREDICATE');
-  // a locked pocket must not have a payer at all
-  invalid(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T + 10))])]), 'UNEXPECTED_PREDICATE');
+  // a locked pocket may have a payer claimant only from the unlock date on
+  invalid(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T - 1))])]), 'UNEXPECTED_PREDICATE');
+  assert.equal(validateOperations(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T))])]), ctx()).length, 1);
+  assert.equal(validateOperations(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T + 10))])]), ctx()).length, 1);
   // compound predicates are not something the kit builds
   invalid(signedTx([claimable([new C(R, C.predicateAnd(before(T), before(T + 5))), new C(P, notBefore(T + 5))])]), 'UNEXPECTED_PREDICATE');
   invalid(signedTx([claimable([new C(R, before(T)), new C(P, C.predicateOr(notBefore(T), notBefore(T + 5)))])]), 'UNEXPECTED_PREDICATE');
@@ -321,4 +324,40 @@ test('a valid signature among several is enough (the payer plus an extra signer)
   tx.sign(keypair());
   const receipt = await submit(s.tenant, { built: s.built, signedXdrs: [tx.toXDR()], horizon: h });
   assert.equal(receipt.transactions.length, 1);
+});
+
+// ── validateOperations, on its own: expiry and fee ──────────────────────────
+
+const withBounds = (timebounds, { fee = '1000', ops = [payment(R)] } = {}) => {
+  const b = new sdk.TransactionBuilder(new sdk.Account(P, '100'), { fee, networkPassphrase: PASSPHRASE, timebounds });
+  ops.forEach((o) => b.addOperation(o));
+  const tx = b.build();
+  tx.sign(payer);
+  return tx;
+};
+
+test('validateOperations rejects a transaction that never expires', () => {
+  invalid(withBounds({ minTime: 0, maxTime: 0 }), 'NO_EXPIRY');
+  invalid(withBounds({ minTime: 0, maxTime: '0' }), 'NO_EXPIRY');
+  assert.equal(validateOperations(withBounds({ minTime: 0, maxTime: NOW + 600 }), ctx()).length, 1);
+  // A transaction built without any time bound at all.
+  const b = new sdk.TransactionBuilder(new sdk.Account(P, '100'), { fee: '1000', networkPassphrase: PASSPHRASE, timebounds: undefined });
+  const open = b.addOperation(payment(R)).setTimeout(0).build();
+  open.sign(payer);
+  invalid(open, 'NO_EXPIRY');
+});
+
+test('validateOperations rejects a fee above 100 times the usual fee per operation', () => {
+  const max = 100 * Number(require('@zelena/harmony-core').payouts.FEE_PER_OP); // per operation
+  assert.equal(validateOperations(withBounds({ minTime: 0, maxTime: NOW }, { fee: String(max) }), ctx()).length, 1);
+  invalid(withBounds({ minTime: 0, maxTime: NOW }, { fee: String(max + 1) }), 'FEE_TOO_HIGH');
+  invalid(withBounds({ minTime: 0, maxTime: NOW }, { fee: '100000000' }), 'FEE_TOO_HIGH');
+  // The bound is per operation: two operations may bid twice as much in total.
+  assert.equal(validateOperations(withBounds({ minTime: 0, maxTime: NOW }, { fee: String(max), ops: [payment(R), payment(R2)] }), ctx()).length, 2);
+});
+
+test('submit still sends what build produced (expiry and fee are within the bounds)', async () => {
+  const s = await built();
+  const h = fakeHorizon({});
+  assert.equal((await submit(s.tenant, { built: s.built, signedXdrs: s.signed, horizon: h })).transactions.length, 1);
 });

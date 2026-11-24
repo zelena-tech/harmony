@@ -40,3 +40,11 @@ test('empty and missing results are tolerated', () => {
   assert.deepEqual(mergeEvents(), { events: [], people: [], unmapped: [] });
   assert.deepEqual(mergeEvents({}, null).events, []);
 });
+
+test('an id that is already a canonical id is not reported as unmapped', () => {
+  const identities = { 'ana-dev': 'ana', 'ana@example.com': 'Ana' };
+  const r = mergeEvents(gh, { events: [{ participantId: 'ana', metric: 'review', value: 1 }, { participantId: 'ANA', metric: 'review', value: 1 }, { participantId: 'zed', metric: 'review', value: 1 }], people: [] },
+    { identities });
+  assert.deepEqual(r.events.map((e) => e.participantId), ['ana', 'ben-dev', 'ana', 'ANA', 'zed']);
+  assert.deepEqual(r.unmapped, ['ben-dev', 'zed'], 'ana and ANA are canonical (case ignored); the others are not in the map');
+});

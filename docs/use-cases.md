@@ -27,7 +27,9 @@ are new in 0.2.0, tested offline and on testnet, and **not audited**.
 - **Program:** template `warehouse-fulfillment`: `topN` (5 people, base 5, pool
   150), quality weight 0.3, four levels, 80% instant and 20% `unlocks` in 30
   days.
-- **Pockets:** the `unlocks` pocket is a savings habit the payer cannot undo.
+- **Pockets:** the `unlocks` pocket is a savings habit the payer cannot undo
+  (for a person who can receive; if the person has not opened the account, the
+  payer can take it back after the hold date).
 - **On the ledger:** one memo (the plan id) per transaction, the payments and
   claimable balances, and the claims. Not the scores or the orders.
 - **What Harmony does not do here:** it does not read your WMS. You export the
@@ -75,8 +77,10 @@ const carrierPay = defineProgram({
 ```
 
 - **Pockets:** the held 10% is released on a date. Because `unlocks` can never
-  be taken back by the payer, it is a promise, not a deposit you can cut if a
-  damage claim arrives later.
+  be taken back by the payer (once the carrier has an account that can receive
+  it), it is a promise, not a deposit you can cut if a damage claim arrives
+  later. A carrier that never opens an account does not lock the money
+  forever: the payer can take it back after the 60 day hold.
 - **On the ledger:** each payment, tied to the plan id.
 - **What Harmony does not do here:** it does not verify the proof of delivery,
   hold cargo insurance or settle disputes.

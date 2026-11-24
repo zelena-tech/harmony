@@ -71,7 +71,8 @@ XLM per claimant of each claimable balance, returned when it is claimed.
 - **Expiring pockets** (`expires`): a reward to claim before a date; after it,
   the payer can take it back.
 - **Unlocking pockets** (`unlocks`): savings or retention that the person can
-  claim only from a date, and the payer can never take back.
+  claim only from a date. The payer can never take it back, except from someone
+  who could not receive yet (no account or no usable trustline), after the hold date.
 - **Hold:** a person with no account or no trustline is not skipped. Their
   money waits as a claimable balance and they claim it with one signature
   that also adds the trustline. The account itself must exist (a first XLM

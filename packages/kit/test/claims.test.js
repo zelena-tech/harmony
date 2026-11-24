@@ -255,11 +255,11 @@ test('submitClaim: a trustline with limit 0 (which removes it) is refused; defau
   const person = keypair();
   const w = person.publicKey();
   const h = fakeHorizon({});
-  const run = (op) => submitClaim(tenant(), { wallet: w, signedXdrs: [rawTx(w, [op, claimOp()], { sign: person }).toXDR()], horizon: h });
+  const run = (op, seq = '100') => submitClaim(tenant(), { wallet: w, signedXdrs: [rawTx(w, [op, claimOp()], { sign: person, seq }).toXDR()], horizon: h });
   await assert.rejects(run(sdk.Operation.changeTrust({ asset: USDC, limit: '0' })), (e) => e.statusCode === 400 && e.code === 'UNEXPECTED_OPERATION');
   assert.equal(h.submitted.length, 0);
   await run(sdk.Operation.changeTrust({ asset: USDC }));
-  await run(sdk.Operation.changeTrust({ asset: USDC, limit: '1000.0000000' }));
+  await run(sdk.Operation.changeTrust({ asset: USDC, limit: '1000.0000000' }), '101'); // the next sequence number of the wallet
   assert.equal(h.submitted.length, 2);
 });
 
@@ -296,4 +296,23 @@ test('the instance methods are bound to the tenant', async () => {
   const w = wallet();
   const harmony = kit.createProgram({ tenant: { id: 'acme-kit', network: 'testnet' }, program: 'tip-pool' });
   assert.deepEqual(await harmony.listClaimable({ wallet: w, horizon: fakeHorizon({}) }), []);
+});
+
+test('listClaimable with `sponsors` returns only the balances created by those payers', async () => {
+  const w = wallet();
+  const payer = wallet();
+  const stranger = wallet();
+  const horizon = () => fakeHorizon({}, {
+    claimable: [
+      { id: balanceId(), amount: '10.0000000', sponsor: payer, ...mine(w, { unconditional: true }) },
+      { id: balanceId(), amount: '0.0000001', sponsor: stranger, ...mine(w, { unconditional: true }) }, // dust sent by anybody
+      { id: balanceId(), amount: '20.0000000', ...mine(w, { unconditional: true }) },                    // no sponsor
+    ],
+  });
+  assert.equal((await listClaimable(tenant(), { wallet: w, horizon: horizon() })).length, 3, 'without the option nothing changes');
+  for (const sponsors of [[payer], new Set([payer])]) {
+    const only = await listClaimable(tenant(), { wallet: w, sponsors, horizon: horizon() });
+    assert.deepEqual(only.map((b) => [b.amount, b.sponsor]), [['10.0000000', payer]]);
+  }
+  assert.deepEqual(await listClaimable(tenant(), { wallet: w, sponsors: [], horizon: horizon() }), []);
 });

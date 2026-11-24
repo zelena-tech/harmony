@@ -7,7 +7,8 @@
  * Usage: mergeEvents(github, azure) or mergeEvents(github, azure, { identities }).
  * `identities` maps a source id (GitHub login, email, ...) to a canonical id;
  * lookup ignores case. Ids missing from the map are kept as they are and listed
- * in `unmapped` (only when `identities` is given).
+ * in `unmapped` (only when `identities` is given), except an id that is itself
+ * a canonical id (it appears as a VALUE in `identities`): that one is already mapped.
  *
  * @param {...object} args connector results, optionally followed by { identities }
  * @returns {{events: Array, people: Array, unmapped: string[]}}
@@ -21,11 +22,16 @@ function mergeEvents(...args) {
   }
   const map = new Map();
   if (identities) for (const [k, v] of Object.entries(identities)) map.set(k.toLowerCase(), v);
+  const canonical = new Set();
+  if (identities) for (const v of Object.values(identities)) canonical.add(String(v).toLowerCase());
   const unmapped = new Set();
   const canon = (id) => {
     if (!identities) return id;
     const hit = map.get(String(id).toLowerCase());
-    if (hit == null) { unmapped.add(id); return id; }
+    if (hit == null) {
+      if (!canonical.has(String(id).toLowerCase())) unmapped.add(id);
+      return id;
+    }
     return hit;
   };
 

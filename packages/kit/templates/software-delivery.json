@@ -31,7 +31,8 @@
       {
         "id": "item_done",
         "label": "Board item closed (effort points)",
-        "points": 5
+        "points": 5,
+        "cap": 200
       },
       {
         "id": "bug_fixed",

@@ -5,6 +5,7 @@ const { toDate, resolveFetch, inWindow } = require('./util');
 
 const CHUNK = 200;
 const DEFAULT_METRICS = { item_done: 'item_done', bug_fixed: 'bug_fixed' };
+const DEFAULT_MAX_EFFORT = 100;
 
 /** WIQL string literal: single quotes are doubled. */
 const lit = (v) => `'${String(v).replace(/'/g, "''")}'`;
@@ -86,18 +87,22 @@ async function post(ctx, path, body) {
  * @param {string[]} [o.types] restrict to these work item types
  * @param {'uniqueName'|'id'} [o.participantKey='uniqueName']
  * @param {Partial<typeof DEFAULT_METRICS>} [o.metrics]
- * @returns {Promise<{events: Array, people: Array, window: object, items: Array, unassigned: {count: number, ids: number[]}}>}
+ * @param {number} [o.maxEffort=100] largest effort one item may credit. Effort is editable by any board user,
+ *        so a larger value is clamped to this one and the item id is listed in `clamped`. A missing, zero,
+ *        negative or non-finite effort counts as 1.
+ * @returns {Promise<{events: Array, people: Array, window: object, items: Array, unassigned: {count: number, ids: number[]}, clamped: number[]}>}
  */
 async function azureBoardsEvents(o = {}) {
   const {
     organization, project, token, auth = 'pat',
     doneStates = ['Done', 'Closed'], bugTypes = ['Bug'],
     effortFields = ['Microsoft.VSTS.Scheduling.Effort', 'Microsoft.VSTS.Scheduling.StoryPoints'],
-    types, participantKey = 'uniqueName',
+    types, participantKey = 'uniqueName', maxEffort = DEFAULT_MAX_EFFORT,
   } = o;
   if (!organization || !project) throw new TypeError('"organization" and "project" are required');
   if (!token) throw new TypeError('"token" is required');
   if (auth !== 'pat' && auth !== 'bearer') throw new TypeError('"auth" must be "pat" or "bearer"');
+  if (typeof maxEffort !== 'number' || !Number.isFinite(maxEffort) || maxEffort <= 0) throw new TypeError('"maxEffort" must be a number > 0');
   if (participantKey !== 'uniqueName' && participantKey !== 'id') {
     throw new TypeError('"participantKey" must be "uniqueName" or "id"');
   }
@@ -130,6 +135,7 @@ async function azureBoardsEvents(o = {}) {
   const items = [];
   const people = new Map();
   const unassigned = { count: 0, ids: [] };
+  const clamped = [];
   const orgPath = `${encodeURIComponent(organization)}/${encodeURIComponent(project)}`;
 
   for (const w of raw) {
@@ -154,6 +160,7 @@ async function azureBoardsEvents(o = {}) {
       participantId: pid || null,
     });
     if (!pid) { unassigned.count += 1; unassigned.ids.push(w.id); continue; }
+    if (!isBug && effort !== null && effort > maxEffort) { effort = maxEffort; clamped.push(w.id); }
     people.set(pid, { participantId: pid, name: a.displayName || pid });
     events.push({
       participantId: pid,
@@ -170,6 +177,7 @@ async function azureBoardsEvents(o = {}) {
     window: { since: since.toISOString(), until: until.toISOString() },
     items,
     unassigned,
+    clamped,
   };
 }
 

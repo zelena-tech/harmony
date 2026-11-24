@@ -1,6 +1,6 @@
 'use strict';
 
-const { HarmonyError, networks, sdk } = require('@zelena/harmony-core');
+const { HarmonyError, networks, payouts, sdk } = require('@zelena/harmony-core');
 
 /**
  * Validation and submission of the transactions the payer signed.
@@ -13,10 +13,13 @@ const { HarmonyError, networks, sdk } = require('@zelena/harmony-core');
  *     between build and signature — another destination, another amount, an
  *     extra operation — is detected. The host must keep `built.hashes` on its
  *     side and never accept them back from the browser.
- *  2. `validateOperations`: a structural check that does not depend on (1).
- *     Only payments and claimable balances of the reward asset, only towards
- *     the wallets of the plan, no operation acting on behalf of another
- *     account, and the payer can only ever be a "take it back later" claimant.
+ *  2. `validateOperations`: a structural SECOND check that does not depend on
+ *     (1). Only payments and claimable balances of the reward asset, only
+ *     towards the wallets it is given, no operation acting on behalf of
+ *     another account, the payer can only ever be a "take it back later"
+ *     claimant, the transaction expires, and its fee is bounded. On its own it
+ *     is not sufficient (it cannot know the amounts or the people): the hash
+ *     check against a `built` kept on the server is the control.
  *  3. The signature: at least one signature must be a valid signature of the
  *     transaction hash by the source account's own key. Without this a wrongly
  *     signed transaction in a batch would only be refused by the network after
@@ -60,6 +63,12 @@ function validateOperations(tx, { code, issuer, wallets, expectedPayer }) {
   if (tx.innerTransaction) reject('Fee-bump transactions are not accepted.');
   const ops = tx.operations || [];
   if (!ops.length) reject('The transaction has no operations.');
+  // A transaction without an expiry could be submitted years from now.
+  const maxTime = tx.timeBounds && tx.timeBounds.maxTime !== undefined ? Number(tx.timeBounds.maxTime) : 0;
+  if (!(maxTime > 0)) reject('The transaction never expires (no maximum time).', { code: 'NO_EXPIRY' });
+  if (BigInt(tx.fee) > BigInt(payouts.FEE_PER_OP) * 100n * BigInt(ops.length)) {
+    reject(`The fee (${tx.fee} stroops) is more than 100 times the usual fee per operation.`, { code: 'FEE_TOO_HIGH' });
+  }
   if (expectedPayer && tx.source !== expectedPayer) {
     throw new HarmonyError(409, `The signing account (${tx.source.slice(0, 6)}…) is not the registered payer. Not submitted.`, { code: 'UNEXPECTED_PAYER' });
   }
@@ -84,7 +93,8 @@ function validateOperations(tx, { code, issuer, wallets, expectedPayer }) {
     if (payers.length) {
       const back = notBeforeTime(payers[0].predicate);
       // The payer may only take the money back later, never while the person can still claim it.
-      if (back === null || window.type === 'notBefore' || (window.type === 'before' && back < window.at)) {
+      // (An `unlocks` pocket of someone who cannot receive yet has a payer claimant too, never before the unlock.)
+      if (back === null || (window.type !== 'unconditional' && back < window.at)) {
         reject(`${where} would let the payer take the money back early.`, { code: 'UNEXPECTED_PREDICATE' });
       }
     } else if (window.type !== 'notBefore') {
@@ -121,8 +131,15 @@ function signedBySource(tx) {
  *        (error 400, code BAD_SIGNATURE). Set it to false only for a payer account with custom
  *        signers (multisig), whose signatures are made with other keys; the network then judges them.
  * @returns {Promise<{planId: string, network: string, transactions: Array}>}
- *          Throws HarmonyError(502) if the network rejects one; `error.submitted`
- *          then lists the transactions that DID go through, to be recorded.
+ *          Stops at the first failure and throws a HarmonyError whose `submitted` lists the transactions
+ *          that DID go through (record them) and `notSent` the hashes that were not sent:
+ *
+ *          - 502, code TRANSACTION_REJECTED: the network answered with result codes. The transaction
+ *            `failedHash` was NOT applied. The ones in `notSent` were not sent: whoever they would have
+ *            paid needs a NEW plan (pass `previous`).
+ *          - 504, code SUBMISSION_UNKNOWN: no answer with result codes (timeout, 5xx, network error).
+ *            `unknownHash` MAY have been applied. Resubmit the SAME signed transactions (resubmitting is
+ *            safe: the network deduplicates by hash). Never build the plan again.
  */
 async function submit(tenant, { built, signedXdrs, horizon, verifySignatures = true }) {
   if (!built || !Array.isArray(built.hashes) || !Array.isArray(built.operations)) throw new HarmonyError(400, 'The build is missing: keep the result of build() and pass it here.');
@@ -162,8 +179,15 @@ async function submit(tenant, { built, signedXdrs, horizon, verifySignatures = t
     let res;
     try { res = await h.submitTransaction(tx); } catch (e) {
       const codes = e && e.response && e.response.data && e.response.data.extras && e.response.data.extras.result_codes;
-      throw new HarmonyError(502, `The network rejected the transaction: ${codes ? JSON.stringify(codes) : e.message}`,
-        { resultCodes: codes || null, failedHash: hash, submitted: transactions });
+      const notSent = parsed.slice(parsed.findIndex((x) => x.hash === hash) + 1).map((x) => x.hash);
+      if (codes) {
+        throw new HarmonyError(502, `The network rejected the transaction: ${JSON.stringify(codes)}`,
+          { code: 'TRANSACTION_REJECTED', resultCodes: codes, failedHash: hash, submitted: transactions, notSent });
+      }
+      throw new HarmonyError(504, `The outcome of the transaction ${hash.slice(0, 8)}… is unknown (${(e && e.message) || 'no answer'}). `
+        + 'It may still be applied. Resubmit the SAME signed transactions (resubmitting is safe: the network deduplicates by hash). '
+        + 'Never build this plan again: that would pay it twice.',
+      { code: 'SUBMISSION_UNKNOWN', unknownHash: hash, submitted: transactions, notSent });
     }
     transactions.push({
       hash: res.hash || hash,

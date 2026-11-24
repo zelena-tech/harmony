@@ -35,7 +35,7 @@ test('phone_wallet: exact header and rows, default pockets are instant only', ()
   assert.equal(r.rows[0].amount, '48.0000000');
   assert.equal(r.rows[1].amount, '0.1000000');
   assert.equal(r.total, '48.1000000');
-  assert.equal(r.csv.split('\n')[1], `+12025550101,w1,48.0000000,${wallet('A')},abcdef012345-w1`);
+  assert.equal(r.csv.split('\n')[1], `+12025550101,w1,48.0000000,${wallet('A')},abcdef012345-pw1`);
   assert.ok(r.csv.endsWith('\n'));
   assert.ok(r.notes.some((n) => /not selected/.test(n)));
 });
@@ -50,7 +50,7 @@ test('email_wallet: header, lowercased email', () => {
 test('phone mode: verification column, header snapshot', () => {
   const r = toSdpDisbursement(basePlan(), { mode: 'phone', contacts, verificationType: 'DATE_OF_BIRTH' });
   assert.equal(r.csv.split('\n')[0], 'phone,id,amount,verification,paymentID');
-  assert.equal(r.csv.split('\n')[1], '+12025550101,w1,48.0000000,1990-01-30,abcdef012345-w1');
+  assert.equal(r.csv.split('\n')[1], '+12025550101,w1,48.0000000,1990-01-30,abcdef012345-pw1');
   assert.ok(r.notes.some((n) => /registers themselves/.test(n)));
 });
 
@@ -133,7 +133,7 @@ test('paymentID is deterministic, unique per person and within SDP limits', () =
   assert.deepEqual(a.rows, b.rows);
   const ids = a.rows.map((r) => r.paymentID);
   assert.equal(new Set(ids).size, 4);
-  assert.equal(ids[0], 'abcdef012345-w1');
+  assert.equal(ids[0], 'abcdef012345-pw1');
   for (const id of ids) {
     assert.ok(id.length <= 64);
     assert.match(id, /^[A-Za-z0-9._-]+$/);
@@ -233,4 +233,39 @@ test('the plan is not mutated', () => {
   const before = JSON.stringify(p);
   toSdpDisbursement(p, { mode: 'phone_wallet', contacts });
   assert.equal(JSON.stringify(p), before);
+});
+
+test('paymentID: a participant id cannot be chosen to collide with the hashed id of another person', () => {
+  const crypto = require('node:crypto');
+  const victim = 'ana@example.com'; // not shaped like a plain id, so it is hashed
+  const hashedShape = `h${crypto.createHash('sha256').update(victim).digest('hex').slice(0, 16)}`; // what the old format would have produced
+  const p = plan([
+    payment(victim, 'Ana', wallet('A'), '10.0000000'),
+    payment(hashedShape, 'Mallory', wallet('C'), '1.0000000'),
+    payment('p1', 'P', wallet('D'), '1.0000000'),
+    payment('h1', 'H', wallet('E'), '1.0000000'),
+  ]);
+  const c = {
+    [victim]: { phone: '+12025550101' }, [hashedShape]: { phone: '+12025550102' }, p1: { phone: '+12025550103' }, h1: { phone: '+12025550104' },
+  };
+  const r = toSdpDisbursement(p, { mode: 'phone_wallet', contacts: c });
+  const ids = r.rows.map((x) => x.paymentID);
+  assert.equal(new Set(ids).size, 4);
+  assert.match(ids[0], /^abcdef012345-h[0-9a-f]{16}$/, 'hashed ids carry the h marker');
+  assert.equal(ids[1], `abcdef012345-p${hashedShape}`, 'plain ids carry the p marker');
+  assert.equal(ids[2], 'abcdef012345-pp1');
+  assert.equal(ids[3], 'abcdef012345-ph1');
+  for (const id of ids) assert.ok(id.length <= 64);
+  // 50 characters is the longest plain id; one more is hashed.
+  const limit = toSdpDisbursement(plan([payment('a'.repeat(50), 'L', wallet('A'), '1.0000000'), payment('a'.repeat(51), 'M', wallet('C'), '1.0000000')]),
+    { mode: 'phone_wallet', contacts: { ['a'.repeat(50)]: { phone: '+12025550101' }, ['a'.repeat(51)]: { phone: '+12025550102' } } });
+  assert.equal(limit.rows[0].paymentID, `abcdef012345-p${'a'.repeat(50)}`);
+  assert.match(limit.rows[1].paymentID, /^abcdef012345-h[0-9a-f]{16}$/);
+});
+
+test('planId must be 64 lowercase hex characters: it is never written into the file unchecked', () => {
+  const rows = [payment('w1', 'Ana', wallet('A'), '1.0000000')];
+  for (const planId of ['=1+1*cmd|x!A', 'ab'.repeat(31), 'AB'.repeat(32), 'ab'.repeat(33), '', null, undefined, 123]) {
+    assert.throws(() => toSdpDisbursement(plan(rows, { planId }), { mode: 'phone_wallet', contacts }), TypeError, String(planId));
+  }
 });

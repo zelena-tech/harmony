@@ -229,3 +229,11 @@ test('end to end: a person claims what was held for them and a late claim after 
   assert.deepEqual(res.transactions.flatMap((t) => t.claimed), mine);
   assert.match(res.transactions[0].hash, /^[0-9a-f]{64}$/);
 });
+
+test('software-delivery caps the effort of a board item, which any board user can edit', () => {
+  const program = kit.defineProgram(kit.template('software-delivery'));
+  assert.equal(program.metrics.find((m) => m.id === 'item_done').cap, 200);
+  const { standings } = kit.score(program, { events: [{ participantId: 'mallory', metric: 'item_done', value: 1e9 }] });
+  assert.equal(standings[0].byMetric.item_done.units, 200);
+  assert.equal(standings[0].adjustedPoints, 1000);
+});

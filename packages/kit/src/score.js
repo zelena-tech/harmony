@@ -2,6 +2,10 @@
 
 const { HarmonyError } = require('@zelena/harmony-core');
 
+const MAX_EVENT_VALUE = 1e9;
+const has = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+const inRange = (n) => Number.isFinite(n) && Math.abs(n) <= Number.MAX_SAFE_INTEGER;
+
 /**
  * Turns the activity of a period into standings. Pure: no network, no clock.
  *
@@ -41,10 +45,13 @@ function levelFor(program, lifetimePoints) {
  * @param {Array<string|number>} [input.participants]  people to list even without events
  * @param {Object<string, number>} [input.quality]     participantId -> 0..1
  * @param {Object<string, number>} [input.lifetime]    participantId -> lifetime points before this period
- * @returns {{standings: Array, totals: {participants: number, qualified: number, adjustedPoints: number}}}
+ * @param {boolean} [input.ignoreUnknownMetrics=false]  skip events of a metric the program does not have (counted in
+ *        `ignored`) instead of throwing UNKNOWN_METRIC
+ * @returns {{standings: Array, totals: {participants: number, qualified: number, adjustedPoints: number}, ignored: Object<string, number>}}
+ *          Throws POINTS_OUT_OF_RANGE if any total is not a finite number within the safe integer range.
  */
 function score(program, input) {
-  const { events, participants, quality, lifetime } = input || {};
+  const { events, participants, quality, lifetime, ignoreUnknownMetrics = false } = input || {};
   if (!Array.isArray(events)) throw new HarmonyError(400, 'events must be an array of { participantId, metric, value }.');
   const metricById = new Map(program.metrics.map((m) => [m.id, m]));
 
@@ -58,12 +65,19 @@ function score(program, input) {
   for (const id of participants || []) touch(id);
 
   const unknown = new Set();
+  const ignored = new Map();
   events.forEach((e, i) => {
     if (!e || typeof e !== 'object') throw new HarmonyError(400, `events[${i}] is not an object.`);
     const metric = metricById.get(e.metric);
-    if (!metric) { unknown.add(String(e.metric)); return; }
+    if (!metric) {
+      if (ignoreUnknownMetrics === true) ignored.set(String(e.metric), (ignored.get(String(e.metric)) || 0) + 1);
+      else unknown.add(String(e.metric));
+      return;
+    }
     const value = e.value === undefined ? 1 : Number(e.value);
-    if (!Number.isFinite(value) || value < 0) throw new HarmonyError(400, `events[${i}].value must be a number >= 0.`);
+    if (!Number.isFinite(value) || value < 0 || value > MAX_EVENT_VALUE) {
+      throw new HarmonyError(400, `events[${i}].value must be a number between 0 and ${MAX_EVENT_VALUE}.`, { code: 'INVALID_EVENT_VALUE' });
+    }
     const units = touch(e.participantId);
     units.set(metric.id, (units.get(metric.id) || 0) + value);
   });
@@ -84,12 +98,15 @@ function score(program, input) {
       raw += points;
     }
     raw = Math.max(0, raw);
-    const q = quality && quality[participantId] !== undefined ? Math.min(1, Math.max(0, Number(quality[participantId]) || 0)) : null;
+    const q = has(quality, participantId) && quality[participantId] !== undefined ? Math.min(1, Math.max(0, Number(quality[participantId]) || 0)) : null;
     const qualityFactor = q === null ? 1 : 1 - w + w * q;
     const earnedPoints = Math.round(raw * qualityFactor);
-    const lifetimeBefore = Math.max(0, Number(lifetime && lifetime[participantId]) || 0);
+    const lifetimeBefore = Math.max(0, Number(has(lifetime, participantId) ? lifetime[participantId] : 0) || 0);
     const level = levelFor(program, lifetimeBefore);
     const adjustedPoints = Math.round(earnedPoints * level.multiplier);
+    if (![raw, earnedPoints, adjustedPoints, lifetimeBefore + earnedPoints].every(inRange)) {
+      throw new HarmonyError(400, `The points of "${participantId}" are out of range (not a finite number within the safe integer range).`, { code: 'POINTS_OUT_OF_RANGE', participantId });
+    }
     return {
       participantId,
       byMetric,
@@ -111,12 +128,16 @@ function score(program, input) {
   standings.sort((a, b) => (b.adjustedPoints - a.adjustedPoints) || (b.earnedPoints - a.earnedPoints) || (a.order - b.order));
   standings.forEach((s, i) => { s.rank = i + 1; delete s.order; });
 
+  const adjustedTotal = standings.reduce((s, r) => s + (r.qualified ? r.adjustedPoints : 0), 0);
+  if (!inRange(adjustedTotal)) throw new HarmonyError(400, 'The adjusted points of all people add up to more than the safe integer range.', { code: 'POINTS_OUT_OF_RANGE' });
+
   return {
     standings,
+    ignored: Object.fromEntries(ignored),
     totals: {
       participants: standings.length,
       qualified: standings.filter((s) => s.qualified).length,
-      adjustedPoints: standings.reduce((s, r) => s + (r.qualified ? r.adjustedPoints : 0), 0),
+      adjustedPoints: adjustedTotal,
     },
   };
 }

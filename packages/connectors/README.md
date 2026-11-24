@@ -38,11 +38,21 @@ const r = await azureBoardsEvents({
   since: '2026-03-01', until: '2026-04-01',
   token: myPat, auth: 'pat',                  // 'pat' (Basic) or 'bearer' (Entra ID token)
   participantKey: 'id',                       // 'uniqueName' (default, usually an email) or 'id'
+  maxEffort: 100,                             // default 100: the most one item may credit (see below)
 });
-// r.events     -> item_done (value = effort or story points, else 1) and bug_fixed (1)
+// r.events     -> item_done (value = effort or story points, else 1, at most maxEffort) and bug_fixed (1)
+// r.clamped    -> ids of the items whose effort was above maxEffort and was cut to it
 // r.unassigned -> { count, ids }  closed items with no assignee; nobody is credited
 // r.items      -> every closed item seen, for auditing
 ```
+
+**Effort is editable by any board user.** Anybody who can edit a work item can
+change its effort or story points after it is closed, and that number becomes
+points (and money). `maxEffort` (default 100) clamps it: a larger effort counts
+as `maxEffort` and the item is listed in `clamped` so you can review it; a
+missing, zero, negative or non-finite effort counts as 1. Keep a cap on the
+`item_done` metric of your program as well (the `software-delivery` template
+has one), and review the `clamped` list before you pay.
 
 Combine sources and map one person across systems:
 
@@ -51,7 +61,8 @@ const { mergeEvents } = require('@zelena/harmony-connectors');
 const { events, unmapped } = mergeEvents(github, azure, {
   identities: { 'ana-dev': 'ana', 'ana@example.com': 'ana' },   // lookup ignores case
 });
-// unmapped: ids that were not in the map (kept as they are)
+// unmapped: ids that were not in the map (kept as they are). An id that is itself
+// a canonical id (a VALUE of the map) is already mapped and is not listed.
 ```
 
 ## Metric ids
@@ -125,7 +136,7 @@ const r = toSdpDisbursement(plan, {
   contacts: { w1: { phone: '+12025550101' } },// supplied by YOUR system, never read from the plan
   // pockets: 'instant' (default) | 'all' | ['now', 'bonus']
 });
-// r.csv     -> "phone,id,amount,walletAddress,paymentID\n+12025550101,w1,48.0000000,G...,abcdef012345-w1\n"
+// r.csv     -> "phone,id,amount,walletAddress,paymentID\n+12025550101,w1,48.0000000,G...,abcdef012345-pw1\n"
 // r.rows    -> the same rows as objects
 // r.skipped -> [{ participantId, name, reason }]  nobody is ever emitted half filled
 // r.total   -> "48.0000000"  (exact: BigInt stroops, never floating point)
@@ -149,10 +160,13 @@ a `verification` value of the single type configured in SDP; pass it as
 `PIN` (4 to 8 characters) or `NATIONAL_ID_NUMBER` (up to 50).
 
 - `id` is the participant id (max 64 characters). `paymentID` is
-  `<first 12 characters of planId>-<participantId>`, so exporting the same plan
+  `<first 12 characters of planId>-p<participantId>`, so exporting the same plan
   twice yields the same ids and a double payment is visible. If the participant
-  id has characters outside `A-Za-z0-9._-` or is long, a short hash of it is
-  used instead, so two people never share a `paymentID`.
+  id has characters outside `A-Za-z0-9._-` or the result would pass 64
+  characters (an id of more than 50), `<first 12 characters>-h<16 hex of a hash
+  of the id>` is used instead. The `p` and `h` markers make the two shapes
+  impossible to confuse, so no participant id can be chosen to collide with
+  somebody else's `paymentID`. `planId` must be 64 lowercase hex characters.
 - Amounts have exactly 7 decimals, the maximum SDP accepts.
 - A person is skipped (with a reason) when the contact, wallet shape or
   verification value is missing or invalid, when the amount is zero, when a

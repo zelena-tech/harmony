@@ -46,47 +46,110 @@ function peopleOf(ids) {
   return out;
 }
 
-/** Horizon account record: XLM, optional reward asset line and subentry counters. */
-function account({ xlm = '100000.0000000', usdc, issuer = ISSUER, subentries = 0, sponsoring = 0, sponsored = 0 } = {}) {
+/**
+ * Horizon account record: XLM, optional reward asset line and subentry counters.
+ * The trustline can carry a `limit`, `authorized` (is_authorized) and `buyingLiabilities`.
+ */
+function account({
+  xlm = '100000.0000000', usdc, issuer = ISSUER, subentries = 0, sponsoring = 0, sponsored = 0, limit, authorized, buyingLiabilities,
+} = {}) {
   const balances = [{ asset_type: 'native', balance: xlm }];
   if (usdc !== undefined && usdc !== null) {
-    balances.push({ asset_type: 'credit_alphanum4', asset_code: 'USDC', asset_issuer: issuer, balance: usdc });
+    balances.push({
+      asset_type: 'credit_alphanum4',
+      asset_code: 'USDC',
+      asset_issuer: issuer,
+      balance: usdc,
+      ...(limit !== undefined ? { limit } : {}),
+      ...(authorized !== undefined ? { is_authorized: authorized } : {}),
+      ...(buyingLiabilities !== undefined ? { buying_liabilities: buyingLiabilities } : {}),
+    });
   }
   return { balances, subentry_count: subentries, num_sponsoring: sponsoring, num_sponsored: sponsored };
 }
 
 /**
- * Fake Horizon. `accounts` maps an account id to account(); anything else is a
- * 404. `failAt` makes the n-th (0-based) submission fail like the network does.
- * `claimable` is what claimableBalances() returns: one page of records, or
- * with `claimablePages` several pages that `page.next()` walks through (an
- * empty page after the last one, as Horizon does). `calls.pages` counts them.
+ * Fake Horizon with a small ledger. `accounts` maps an account id to account();
+ * anything else is a 404. Like the network it keeps a sequence number per
+ * account and applies a transaction only when its sequence is the next one
+ * (`tx_bad_seq` otherwise); a transaction it already applied is answered with
+ * the stored result, not applied twice (Horizon deduplicates by hash).
+ *
+ * Options:
+ *   failAt        n-th (0-based) submission is rejected with result codes (NOT applied)
+ *   timeoutOn     Set of submission indexes that are APPLIED but answered with a 504
+ *   dropOn        Set of submission indexes that are NOT applied and answered with a 504
+ *   lookupError   transactions() lookups fail with this error
+ *   claimable / claimablePages   what claimableBalances() returns: one page, or several pages
+ *                 that `page.next()` walks through (an empty page after the last, as Horizon does)
+ *
+ * `submitted` lists the applied transactions; `calls` counts what was asked.
+ * `appliedStroops()` is the sum of every payment and claimable balance applied.
  */
-function fakeHorizon(accounts, { failAt = null, claimable = [], claimablePages = null } = {}) {
+function fakeHorizon(accounts, {
+  failAt = null, claimable = [], claimablePages = null, timeoutOn = null, dropOn = null, lookupError = null,
+} = {}) {
   const submitted = [];
-  const calls = { claimant: [], asset: [], limit: [], pages: 0 };
+  const history = []; // transaction records as Horizon lists them, oldest first
+  const stored = new Map(); // hash -> result
+  const seqs = new Map();
+  const calls = { claimant: [], asset: [], limit: [], pages: 0, transactions: 0, lookups: [] };
   const pages = claimablePages || [claimable];
   const pageAt = (i) => { calls.pages += 1; return { records: pages[i] || [], next: async () => pageAt(i + 1) }; };
   let attempts = 0;
+  const reject = (transaction) => {
+    const e = new Error('Bad Request');
+    e.response = { status: 400, data: { extras: { result_codes: { transaction } } } };
+    return e;
+  };
+  const unknown = () => { const e = new Error('Request failed with status code 504'); e.response = { status: 504, data: { title: 'Timeout' } }; return e; };
   return {
     submitted,
     calls,
+    appliedStroops: () => submitted.reduce((sum, tx) => sum + tx.operations.reduce((t, op) => (
+      t + (op.type === 'payment' || op.type === 'createClaimableBalance' ? BigInt(Math.round(Number(op.amount) * 1e7)) : 0n)), 0n), 0n),
     loadAccount: async (id) => {
       const a = accounts[id];
       if (!a) { const e = new Error('Not Found'); e.response = { status: 404 }; throw e; }
-      const acc = new sdk.Account(id, '100');
+      const acc = new sdk.Account(id, String(seqs.has(id) ? seqs.get(id) : 100n));
       Object.assign(acc, a);
       return acc;
     },
     submitTransaction: async (tx) => {
       const n = attempts++;
-      if (failAt !== null && n === failAt) {
-        const e = new Error('Bad Request');
-        e.response = { status: 400, data: { extras: { result_codes: { transaction: 'tx_bad_seq' } } } };
-        throw e;
-      }
+      const hash = tx.hash().toString('hex');
+      if (stored.has(hash)) return stored.get(hash);
+      if (failAt !== null && n === failAt) throw reject('tx_bad_seq');
+      if (dropOn && dropOn.has(n)) throw unknown();
+      const current = seqs.has(tx.source) ? seqs.get(tx.source) : 100n;
+      if (BigInt(tx.sequence) !== current + 1n) throw reject('tx_bad_seq');
+      seqs.set(tx.source, current + 1n);
       submitted.push(tx);
-      return { hash: tx.hash().toString('hex'), ledger: 1000 + n };
+      history.push({
+        hash,
+        source_account: tx.source,
+        memo_type: tx.memo && tx.memo.type === 'hash' ? 'hash' : 'none',
+        ...(tx.memo && tx.memo.type === 'hash' ? { memo: Buffer.from(tx.memo.value).toString('base64') } : {}),
+      });
+      const result = { hash, ledger: 1000 + n };
+      stored.set(hash, result);
+      if (timeoutOn && timeoutOn.has(n)) throw unknown();
+      return result;
+    },
+    transactions: () => {
+      calls.transactions += 1;
+      const q = { account: null, direction: 'asc', max: 10 };
+      const b = {
+        forAccount: (a) => { q.account = a; return b; },
+        order: (o) => { q.direction = o; return b; },
+        limit: (l) => { q.max = l; calls.lookups.push({ account: q.account, order: q.direction, limit: l }); return b; },
+        call: async () => {
+          if (lookupError) throw lookupError;
+          const mine = history.filter((r) => r.source_account === q.account);
+          return { records: (q.direction === 'desc' ? mine.slice().reverse() : mine).slice(0, q.max) };
+        },
+      };
+      return b;
     },
     claimableBalances: () => {
       const b = {

@@ -3,6 +3,12 @@
 Turn the work a system already records into points, levels and pockets, and
 pay it on Stellar without holding anybody's keys.
 
+<p>
+  <img src="docs/assets/card-sample-1.svg" alt="Harmony Card: level, points, pockets and the transaction that proves the payment" width="32%">
+  <img src="docs/assets/card-sample-2.svg" alt="Harmony Card of a top-level courier" width="32%">
+  <img src="docs/assets/card-sample-3.svg" alt="Harmony Card of a software contributor" width="32%">
+</p>
+
 Harmony was born inside a warehouse management system. `packages/kit` now
 generalizes it to couriers, sales, support, contractors, collections and
 software teams. It is non-custodial: it builds unsigned transactions and the
@@ -18,7 +24,8 @@ packages/core/        off-chain engine (Node.js): scoring, payout planning,
                       non-custodial payment transactions, Soroban client
 packages/kit/         programs, levels, payout models, pockets, claimable
                       balances, Harmony Cards, 11 industry templates
-packages/connectors/  GitHub and Azure Boards events for the kit
+packages/connectors/  work events from GitHub and Azure Boards; export of a
+                      plan to the Stellar Disbursement Platform
 docs/                 architecture, scoring, payouts, kit, use cases, adoption
                       levels, hackathon guide; docs/audit/ for auditors
 examples/             quickstarts, software team, private payouts

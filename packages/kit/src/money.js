@@ -1,5 +1,7 @@
 'use strict';
 
+const { HarmonyError } = require('@zelena/harmony-core');
+
 /**
  * Exact money arithmetic. Stellar amounts have 7 decimals (1 stroop); every
  * split in the kit is done with integer stroops (BigInt) and every amount that
@@ -7,13 +9,32 @@
  */
 
 const STROOPS_PER_UNIT = 10000000n;
+/** Largest amount a Stellar balance or operation can hold (int64), in stroops. */
+const MAX_STROOPS = 9223372036854775807n;
 
-/** @param {number|string} amount non-negative, at most 7 decimals are kept */
+/**
+ * Exact conversion, with no floating-point multiplication. Numbers go through
+ * `toFixed(7)` (the 7th decimal is rounded, as the core planner does); strings
+ * must be plain decimals with at most 7 decimals. Negatives, NaN, exponent
+ * notation, more than 7 decimals in a string and anything above the int64
+ * maximum are refused with HarmonyError(400).
+ *
+ * @param {number|string} amount
+ * @returns {bigint}
+ */
 function toStroops(amount) {
-  const n = Number(amount);
-  if (!Number.isFinite(n) || n < 0) throw new RangeError(`Invalid amount: ${amount}`);
-  if (n > 900000000) throw new RangeError(`Amount too large to be exact: ${amount}`);
-  return BigInt(Math.round(n * 1e7));
+  const bad = () => new HarmonyError(400, `Invalid amount: ${typeof amount === 'string' ? JSON.stringify(amount) : String(amount)}`, { code: 'INVALID_AMOUNT' });
+  let s;
+  if (typeof amount === 'number') {
+    if (!Number.isFinite(amount) || amount < 0) throw bad();
+    s = amount.toFixed(7); // from 1e21 on toFixed gives exponent notation, which the pattern below refuses
+  } else if (typeof amount === 'string') s = amount;
+  else throw bad();
+  if (!/^\d+(\.\d{1,7})?$/.test(s)) throw bad();
+  const [whole, frac = ''] = s.split('.');
+  const stroops = BigInt(whole) * STROOPS_PER_UNIT + BigInt(frac.padEnd(7, '0'));
+  if (stroops > MAX_STROOPS) throw new HarmonyError(400, `Amount too large: ${s}`, { code: 'INVALID_AMOUNT' });
+  return stroops;
 }
 
 /** @param {bigint} stroops @returns {string} e.g. "12.5000000" */
@@ -39,4 +60,4 @@ function splitByBasisPoints(total, bps) {
   return parts;
 }
 
-module.exports = { STROOPS_PER_UNIT, toStroops, fromStroops, splitByBasisPoints };
+module.exports = { STROOPS_PER_UNIT, MAX_STROOPS, toStroops, fromStroops, splitByBasisPoints };

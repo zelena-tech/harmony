@@ -192,9 +192,9 @@ test('bad input is rejected with a 400', () => {
   bad(undefined, /events must be an array/);
   bad({ events: 'x' }, /events must be an array/);
   bad({ events: [null] }, /not an object/);
-  bad({ events: [ev('a', 'good', -1)] }, /value must be a number >= 0/);
-  bad({ events: [ev('a', 'good', NaN)] }, /value must be a number >= 0/);
-  bad({ events: [ev('a', 'good', 'many')] }, /value must be a number >= 0/);
+  bad({ events: [ev('a', 'good', -1)] }, /value must be a number between 0 and/);
+  bad({ events: [ev('a', 'good', NaN)] }, /value must be a number between 0 and/);
+  bad({ events: [ev('a', 'good', 'many')] }, /value must be a number between 0 and/);
   bad({ events: [{ metric: 'good' }] }, /participantId/);
   bad({ events: [ev('', 'good', 1)] }, /participantId/);
   bad({ events: [], participants: [null] }, /participantId/);
@@ -211,4 +211,49 @@ test('scoring is pure: the same input gives the same output and the input is unt
   const copy = JSON.parse(JSON.stringify(events));
   assert.deepEqual(score(program(), { events }), score(program(), { events }));
   assert.deepEqual(events, copy);
+});
+
+test('every event value must be finite, >= 0 and <= 1e9', () => {
+  const bad = (value) => assert.throws(() => score(program(), { events: [ev('a', 'good', value)] }),
+    (e) => e.statusCode === 400 && e.code === 'INVALID_EVENT_VALUE', String(value));
+  [1e9 + 1, 1e308, Infinity, -Infinity, NaN, -0.5].forEach(bad);
+  assert.equal(row(score(program(), { events: [ev('a', 'good', 1e9)] }), 'a').rawPoints, 1e10);
+});
+
+test('points that leave the safe integer range are refused, not rounded into nonsense', () => {
+  // A program may legitimately give a huge number of points per unit; the total must stay safe.
+  const huge = defineProgram({ id: 'huge', name: 'Huge', metrics: [{ id: 'm', label: 'M', points: 1e300 }], payout: { model: 'proportional', pool: 1 } });
+  const out = (events) => assert.throws(() => score(huge, { events }), (e) => e.statusCode === 400 && e.code === 'POINTS_OUT_OF_RANGE');
+  out([{ participantId: 'a', metric: 'm', value: 1e9 }]);                 // Infinity
+  const big = defineProgram({ id: 'big', name: 'Big', metrics: [{ id: 'm', label: 'M', points: 1e9 }], payout: { model: 'proportional', pool: 1 } });
+  assert.throws(() => score(big, { events: [{ participantId: 'a', metric: 'm', value: 1e9 }] }), (e) => e.code === 'POINTS_OUT_OF_RANGE'); // 1e18 > 2^53
+  assert.throws(() => score(big, { events: [{ participantId: 'a', metric: 'm', value: 1e6 }, { participantId: 'a', metric: 'm', value: 1e6 }], lifetime: { a: 1e300 } }),
+    (e) => e.code === 'POINTS_OUT_OF_RANGE');
+  assert.equal(row(score(big, { events: [{ participantId: 'a', metric: 'm', value: 1e6 }] }), 'a').earnedPoints, 1e15);
+});
+
+test('quality and lifetime are looked up by own property: ids such as constructor behave like any other id', () => {
+  const p = program({ quality: { weight: 0.4 } });
+  const events = ['ana', 'constructor', 'toString', '__proto__', 'hasOwnProperty'].map((id) => ev(id, 'good', 10));
+  const res = score(p, { events, quality: {}, lifetime: {} });
+  for (const s of res.standings) {
+    assert.equal(s.quality, null, s.participantId);
+    assert.equal(s.qualityFactor, 1);
+    assert.equal(s.adjustedPoints, 100);
+    assert.equal(s.lifetimeBefore, 0);
+  }
+  // A real entry still works, and an entry for such an id is used.
+  const own = score(p, { events: [ev('constructor', 'good', 10)], quality: { constructor: 0.5 }, lifetime: { constructor: 7 } });
+  assert.equal(row(own, 'constructor').quality, 0.5);
+  assert.equal(row(own, 'constructor').lifetimeBefore, 7);
+});
+
+test('ignoreUnknownMetrics skips the events of a metric the program does not have and counts them', () => {
+  const events = [ev('a', 'good', 2), ev('a', 'nope', 5), ev('b', 'nope', 1), ev('b', 'other'), ev('c', 'constructor')];
+  assert.throws(() => score(program(), { events }), (e) => e.code === 'UNKNOWN_METRIC');
+  const res = score(program(), { events, ignoreUnknownMetrics: true });
+  assert.deepEqual(res.ignored, { nope: 2, other: 1, constructor: 1 });
+  assert.deepEqual(res.standings.map((s) => s.participantId), ['a'], 'people with only ignored events do not appear');
+  assert.equal(row(res, 'a').adjustedPoints, 20);
+  assert.deepEqual(score(program(), { events: [ev('a', 'good')] }).ignored, {});
 });

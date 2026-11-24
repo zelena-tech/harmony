@@ -64,15 +64,19 @@ function csvField(value) {
 }
 
 /**
- * Deterministic `paymentID` for one person in one plan:
- * `<first 12 chars of planId>-<participantId>`. When the participant id holds a
- * character outside [A-Za-z0-9._-], or the result would exceed SDP's 64
- * characters, a short hash of the original id is used instead
- * (`<first 12 chars>-h<16 hex>`), so two participants never share a paymentID.
+ * Deterministic `paymentID` for one person in one plan. A marker after the
+ * plan prefix tells the two shapes apart, so they can never collide, whatever
+ * a participant id looks like:
+ *
+ *   plain   `<first 12 chars of planId>-p<participantId>`
+ *   hashed  `<first 12 chars>-h<16 hex of sha256(participantId)>`
+ *
+ * The hashed shape is used when the id holds a character outside
+ * [A-Za-z0-9._-] or the plain one would exceed SDP's 64 characters.
  */
 function paymentIdFor(planId, participantId) {
   const prefix = String(planId).slice(0, 12);
-  const plain = `${prefix}-${participantId}`;
+  const plain = `${prefix}-p${participantId}`;
   if (/^[A-Za-z0-9._-]+$/.test(participantId) && plain.length <= MAX_ID_LENGTH) return plain;
   const h = crypto.createHash('sha256').update(participantId).digest('hex').slice(0, 16);
   return `${prefix}-h${h}`;
@@ -110,9 +114,11 @@ function pickPockets(payment, selection) {
  * verification column); the `phone` / `email` variants need a verification
  * value per person, of the one type configured on the disbursement.
  *
- * `paymentID` is `<first 12 chars of planId>-<participantId>` (hashed when the
- * id has unusual characters or is long), so re-exporting the same plan gives
- * the same ids. Rows a person cannot fill completely go to `skipped`.
+ * `paymentID` is `<first 12 chars of planId>-p<participantId>` (or `-h<hash>` when
+ * the id has unusual characters or is long; the markers keep the two shapes
+ * apart), so re-exporting the same plan gives the same ids. `plan.planId`
+ * must be 64 lowercase hex characters. Rows a person cannot fill completely go
+ * to `skipped`.
  *
  * @param {object} plan Harmony payout plan.
  * @param {object} options
@@ -129,6 +135,9 @@ function pickPockets(payment, selection) {
  */
 function toSdpDisbursement(plan, options = {}) {
   if (!plan || !Array.isArray(plan.payments)) throw new TypeError('"plan" must be a Harmony payout plan with a payments array');
+  if (typeof plan.planId !== 'string' || !/^[0-9a-f]{64}$/.test(plan.planId)) {
+    throw new TypeError('"plan.planId" must be 64 lowercase hex characters (the id of a Harmony payout plan)');
+  }
   const mode = MODES[options.mode];
   if (!mode) throw new TypeError(`"mode" must be one of ${Object.keys(MODES).join(', ')}`);
   const selection = options.pockets == null ? 'instant' : options.pockets;

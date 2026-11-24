@@ -42,11 +42,17 @@ function stringKeyed(map) {
 }
 
 /**
- * Stable id of a plan: sha256 of what will be paid. It travels on-chain as the
- * transaction memo, which ties every payment to its plan.
+ * Id of a plan: sha256 of what will be paid plus a random salt. It travels
+ * on-chain as the transaction memo, which ties every payment to its plan.
+ *
+ * It is a CHECKSUM, not authentication: anybody who holds a plan can edit it
+ * and recompute the id. The salt keeps the public memo from being guessable
+ * from the (possibly personal) participant ids; keep the plan private. To
+ * detect edits made outside your server use `sealKey` (see `sealOf`).
  */
 function planIdOf(plan) {
   const canonical = JSON.stringify({
+    salt: plan.salt,
     program: plan.programId,
     tenant: plan.tenantId,
     asset: [plan.asset.code, plan.asset.issuer],
@@ -59,6 +65,20 @@ function planIdOf(plan) {
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
+const SALT_RX = /^[0-9a-f]{32}$/;
+
+/** A seal key is a string or a Buffer of at least 32 bytes. Throws otherwise. */
+function assertSealKey(sealKey) {
+  const ok = (typeof sealKey === 'string' || Buffer.isBuffer(sealKey)) && Buffer.byteLength(sealKey) >= 32;
+  if (!ok) throw new HarmonyError(400, 'sealKey must be a string or a Buffer of at least 32 bytes.', { code: 'INVALID_SEAL_KEY' });
+}
+
+/** HMAC-SHA256(sealKey, planId), hex: proves the plan id was issued by whoever holds the key. */
+function sealOf(planId, sealKey) {
+  assertSealKey(sealKey);
+  return crypto.createHmac('sha256', sealKey).update(String(planId)).digest('hex');
+}
+
 /**
  * @param {object} program  defineProgram() result
  * @param {object} tenant   defineTenant() result
@@ -68,17 +88,28 @@ function planIdOf(plan) {
  * @param {number} [input.now]                unix seconds; pocket dates are computed from it
  * @param {Map}    [input.previous]           payouts.summarizePrevious() of this campaign (keys: participantId)
  * @param {Map}    [input.walletChanges]      participantId -> { hours }
- * @param {object} [input.options]            { pool, base, topN, rate, budget, includeAlreadyPaid }
+ * @param {object} [input.options]            { pool, base, topN, rate, budget, includeAlreadyPaid, allowSharedWallets }
+ * @param {string} [input.salt]               32 hex chars; random by default (pass one only for reproducible tests)
+ * @param {string|Buffer} [input.sealKey]     >= 32 bytes: the plan gets `seal`, which build() then requires
  */
 function plan(program, tenant, input) {
   const { standings, people, previous, walletChanges } = input || {};
   const opts = (input && input.options) || {};
   if (!Array.isArray(standings) || !standings.length) throw new HarmonyError(409, 'There are no standings: score the period first.');
+  const sealKey = input.sealKey;
+  if (sealKey !== undefined && sealKey !== null) assertSealKey(sealKey);
+  const salt = input.salt === undefined ? crypto.randomBytes(16).toString('hex') : input.salt;
+  if (typeof salt !== 'string' || !SALT_RX.test(salt)) throw new HarmonyError(400, 'salt must be 32 lowercase hex characters (16 bytes).');
   const now = input.now === undefined ? Math.floor(Date.now() / 1000) : input.now;
   if (!Number.isInteger(now) || now <= 0) throw new HarmonyError(400, 'now must be a unix time in seconds.');
 
+  const byId = new Map();
+  for (const s of standings) {
+    const id = String(s && s.participantId);
+    if (byId.has(id)) throw new HarmonyError(400, `The standings list "${id}" twice: a person must appear once.`, { code: 'DUPLICATE_PARTICIPANT' });
+    byId.set(id, s);
+  }
   const who = peopleMap(people);
-  const byId = new Map(standings.map((s) => [String(s.participantId), s]));
   // Only whoever qualified is paid. The ranks are unchanged, because everybody
   // who qualified is above everybody who did not.
   const ranking = standings.filter((s) => s.qualified && s.adjustedPoints > 0).map((s) => {
@@ -91,6 +122,17 @@ function plan(program, tenant, input) {
     };
   });
   const qualified = ranking;
+  if (opts.allowSharedWallets !== true) {
+    const owner = new Map();
+    for (const r of ranking) {
+      if (!r.wallet) continue;
+      if (owner.has(r.wallet)) {
+        throw new HarmonyError(409, `"${owner.get(r.wallet)}" and "${r.workerId}" have the same wallet: one person could be paid twice. `
+          + 'Fix the wallets, or pass options.allowSharedWallets: true if sharing is intended.', { code: 'SHARED_WALLET' });
+      }
+      owner.set(r.wallet, r.workerId);
+    }
+  }
   if (!qualified.length) throw new HarmonyError(409, 'Nobody qualified in this period: there is nobody to pay.', { code: 'NOBODY_QUALIFIED' });
   const sumPoints = qualified.reduce((s, r) => s + r.adjustedPoints, 0);
 
@@ -131,6 +173,15 @@ function plan(program, tenant, input) {
     options: coreOptions,
   });
 
+  if (model !== 'topN') {
+    // Shares of about one stroop can round up: never pay more than the pool.
+    const paid = core.payments.reduce((sum, p) => sum + toStroops(p.amount), 0n);
+    if (paid > toStroops(coreOptions.pool)) {
+      throw new HarmonyError(409, `The pool (${fromStroops(toStroops(coreOptions.pool))}) is too small for ${core.payments.length} people: `
+        + `the rounded shares add up to ${fromStroops(paid)}. Use a bigger pool or fewer people.`, { code: 'POOL_TOO_SMALL' });
+    }
+  }
+
   const bps = program.pockets.map((k) => k.shareBp);
   const payments = core.payments.map((p) => {
     const total = toStroops(p.amount);
@@ -166,6 +217,7 @@ function plan(program, tenant, input) {
     network: tenant.network,
     asset: { code: tenant.rewardAsset.code, issuer: tenant.rewardAsset.issuer },
     createdAt: now,
+    salt,
     rule,
     payments,
     total: fromStroops(payments.reduce((s, p) => s + toStroops(p.amount), 0n)),
@@ -182,13 +234,17 @@ function plan(program, tenant, input) {
     caps: core.caps,
   };
   result.planId = planIdOf(result);
+  if (sealKey !== undefined && sealKey !== null) result.seal = sealOf(result.planId, sealKey);
   return result;
 }
 
 /**
- * Checks that a plan was not altered after it was created: same id, pockets
- * that add up to each payment, payments that add up to the total.
- * Throws HarmonyError(400) otherwise.
+ * Consistency check of a plan: same id, pockets that add up to each payment,
+ * payments that add up to the total. Throws HarmonyError(400) otherwise.
+ *
+ * This is NOT authentication: the id is an unkeyed checksum, so whoever edits
+ * a plan can recompute it. It catches accidents. `build` re-derives the
+ * pockets from the program and, with a `sealKey`, requires the seal.
  */
 function assertPlanIntegrity(p) {
   const bad = (why) => { throw new HarmonyError(400, `The plan is not consistent: ${why}.`, { code: 'PLAN_ALTERED' }); };
@@ -203,4 +259,4 @@ function assertPlanIntegrity(p) {
   if (planIdOf(p) !== p.planId) bad('its id does not match its content');
 }
 
-module.exports = { plan, planIdOf, assertPlanIntegrity, peopleMap };
+module.exports = { plan, planIdOf, assertPlanIntegrity, peopleMap, sealOf, assertSealKey };

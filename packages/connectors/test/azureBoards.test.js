@@ -187,3 +187,36 @@ test('input validation', async () => {
   await assert.rejects(azureBoardsEvents({ organization: 'o', project: 'p', since: UNTIL, until: SINCE, token: 't', fetch }), RangeError);
   assert.equal(fetch.calls.length, 0);
 });
+
+test('maxEffort (default 100) clamps an edited effort and lists the item; bad efforts count as 1', async () => {
+  const fetch = () => boardFetch([
+    item(1, 'User Story', person('ana'), { [EFFORT]: 5 }),
+    item(2, 'User Story', person('mallory'), { [EFFORT]: 1e308 }),
+    item(3, 'User Story', person('mallory'), { [EFFORT]: 100 }),
+    item(4, 'User Story', person('mallory'), { [EFFORT]: 100.5 }),
+    item(5, 'User Story', person('ben'), { [EFFORT]: -7 }),
+    item(6, 'User Story', person('ben'), { [EFFORT]: 'lots' }),
+    item(7, 'User Story', person('cai'), { [EFFORT]: Infinity }),
+    item(8, 'Bug', person('cai'), { [EFFORT]: 1e9 }),
+    item(9, 'User Story', undefined, { [EFFORT]: 1e9 }),
+  ]);
+  const r = await run(fetch());
+  assert.deepEqual(r.events.map((e) => [e.participantId.split('@')[0], e.metric, e.value]), [
+    ['ana', 'item_done', 5],
+    ['mallory', 'item_done', 100],
+    ['mallory', 'item_done', 100],
+    ['mallory', 'item_done', 100],
+    ['ben', 'item_done', 1],
+    ['ben', 'item_done', 1],
+    ['cai', 'item_done', 1], // Infinity is serialized as null by JSON, which counts as 1
+    ['cai', 'bug_fixed', 1],
+  ]);
+  assert.deepEqual(r.clamped, [2, 4]);
+  assert.deepEqual(r.unassigned.ids, [9], 'an unassigned item credits nobody and is not "clamped"');
+
+  const custom = await run(fetch(), { maxEffort: 8 });
+  assert.deepEqual(custom.events.filter((e) => e.participantId.startsWith('mallory')).map((e) => e.value), [8, 8, 8]);
+  assert.deepEqual(custom.clamped, [2, 3, 4]);
+  assert.deepEqual((await run(boardFetch([item(1, 'Task', person('ana'), { [EFFORT]: 3 })]))).clamped, []);
+  for (const bad of [0, -1, NaN, Infinity, '100', null]) await assert.rejects(run(fetch(), { maxEffort: bad }), TypeError, String(bad));
+});
