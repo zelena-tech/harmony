@@ -36,6 +36,19 @@ It scores a set of events, builds a payout plan and prints the Harmony Cards.
 No wallet, no keys, no network. This is level 0 in
 [adoption-levels.md](adoption-levels.md).
 
+### Start from a spreadsheet
+
+If the data you have is a CSV export, `csvEvents` in `packages/connectors`
+turns it into events, and three runnable cases show the whole path for
+logistics, supplier payments and accounts-receivable collection:
+
+```bash
+node examples/use-cases/run.js carriers      # or: suppliers, collections
+```
+
+See [examples/use-cases](../examples/use-cases/README.md): it stops at the
+plan, with the ranking, a payout preview and the rows it could not use.
+
 ## 3. Testnet quickstart (real transactions)
 
 ```bash
@@ -56,7 +69,7 @@ const { createProgram } = require('./packages/kit/src');   // path into the clon
 
 const harmony = createProgram({
   tenant: { id: 'my-project', network: 'testnet' },
-  program: 'learn-to-earn',                                 // one of the 11 templates
+  program: 'learn-to-earn',                                 // one of the 14 templates
 });
 
 const { standings } = harmony.score({ events });            // [{ participantId, metric, value }]

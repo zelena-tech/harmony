@@ -2,7 +2,7 @@
 
 Turns work that a system already records into plain Harmony events,
 `{ participantId, metric, value }`, so a program can score it and pay it out.
-Two sources: **GitHub** and **Azure Boards**. Zero dependencies, global `fetch`,
+Three sources: **GitHub**, **Azure Boards** and any **CSV** export. Zero dependencies, global `fetch`,
 no environment variables: you pass the token as an argument, and every function
 accepts an injectable `fetch`, so tests never touch the network.
 
@@ -75,6 +75,88 @@ const { events, unmapped, assumedCanonical } = mergeEvents(github, azure, {
 //                   people with the same id) is visible. Review it before you pay.
 ```
 
+## CSV
+
+Most companies cannot give API access on day one, but every one of them can
+export a spreadsheet. `csvEvents` turns that export into events. It is a pure
+function: CSV text in, no file system and no network (read the file in your own
+code).
+
+```js
+const fs = require('node:fs');
+const { csvEvents } = require('@zelena/harmony-connectors');
+
+const r = csvEvents(fs.readFileSync('deliveries.csv', 'utf8'), {
+  participant: 'Carrier',                 // required: who did the work
+  name: 'Carrier name',                   // optional display name
+  date: 'Delivered on', dateFormat: 'DD/MM/YYYY',
+  since: '2026-11-01', until: '2026-12-01',   // rows in [since, until); needs `date`
+  ref: 'Order',                           // copied to each event, to trace a payout to its rows
+  delimiter: ';', decimal: ',',           // Spanish-locale export
+  rules: [
+    { metric: 'delivery_confirmed', when: { column: 'Status', equals: 'Delivered' } },
+    { metric: 'delivered_on_time', when: [{ column: 'Status', equals: 'Delivered' }, { column: 'Days late', lte: 0 }] },
+    { metric: 'unit_accepted', value: { column: 'Units accepted' } },
+  ],
+});
+// r.events    -> [{ participantId, metric, value, at?, ref? }, ...]
+// r.people    -> [{ participantId, name }]       everybody with a usable row
+// r.rows      -> data rows read (blank lines excluded)
+// r.skipped   -> [{ line, reason }]              rows that could not be used, never dropped silently
+// r.unmatched -> usable rows that no rule turned into an event
+// r.window    -> { since, until } as ISO strings, or null
+```
+
+### Mapping reference
+
+| Key | Meaning |
+| --- | --- |
+| `participant` | Column that holds who did the work. Required. The cell, trimmed, is the participant id. |
+| `name` | Column with the display name (the first non-empty one seen for each participant). |
+| `date` | Column with the date of the row. When set, every row needs a readable date. |
+| `dateFormat` | `'ISO'` (default), `'DD/MM/YYYY'` or `'MM/DD/YYYY'`. ISO dates (`2026-11-05`, `2026-11-05 14:30`, `2026-11-05T14:30:00Z`) are always read; a time without an offset is UTC. A slash date (`05/03/2026`) is read only when `dateFormat` says which order it uses, and is skipped otherwise. Separators `/`, `.` and `-` are accepted. |
+| `since`, `until` | ISO dates. A row is kept when `since <= date < until` (`until` is exclusive). Both need `date`. |
+| `rules` | Array. Each rule turns a row into at most one event: `{ metric, when?, value? }`. A row can feed several rules. |
+| `ref` | Column copied to the `ref` of each event (order number, invoice number). |
+| `decimal` | `'.'` (default) or `','`. Declares the notation of every number: with `'.'`, `1,234.56`; with `','`, `1.234,56`. A number in the other notation is skipped, never guessed. No exponents, currency signs or `NaN`. |
+| `delimiter` | One character, default `,`. Use `;` for most Spanish-locale exports, or a tab. |
+| `maxRows` | Most data rows accepted. Default and ceiling 200,000; more than that is an error, not a truncation. |
+
+`when` is one condition or an array of them (all must hold). A condition is
+`{ column, ...operators }` with at least one of:
+
+| Operator | True when the trimmed cell |
+| --- | --- |
+| `equals` | is exactly that text or number (case matters) |
+| `in` | is exactly one of those texts or numbers |
+| `notEmpty` | is not empty (`true`) or is empty (`false`) |
+| `gt`, `gte`, `lt`, `lte` | is a number that compares that way; an empty cell is false; a non-number skips the row |
+
+`value` is a number (default `1`) or `{ column, scale?, round? }`: the number in
+that column times `scale` (default 1), then `round`: `'floor'`, `'ceil'` or a
+number of decimals. An empty or non-numeric cell, a negative number or a result
+above 1,000,000,000 skips the row. A value that comes out as exactly 0 credits
+nothing. Use a metric with negative points (`rejected_unit`), not a negative
+value, to take points away. `value` is only evaluated for a row whose `when`
+holds.
+
+**What is guaranteed.** The parser follows RFC 4180: quoted fields with
+delimiters, doubled quotes and line breaks inside quotes, CRLF, LF or CR line
+ends, an optional byte-order mark, blank lines ignored, trimmed headers. The
+header row is required; a duplicate header name, a mapped column that is not in
+the header, an unterminated quote or more rows than `maxRows` throw a
+`ConnectorError` (a mapping that is not well formed throws a `TypeError`). A row
+with a different number of columns than the header is skipped. Cells are data:
+one that starts with `=`, `+`, `-` or `@` is just text here (it matters only if
+you later write it into a spreadsheet; `toSdpDisbursement` refuses such ids).
+
+**What is not.** Rows are not deduplicated: if the export lists an order twice, it
+counts twice (put an order number in `ref` and look for repeats). A participant is
+whatever the cell says, so `Ana` and `ana` are two people; map them with
+`mergeEvents({ identities })` or clean the export. The numbers are only as good as
+the export: review `skipped`, `unmatched` and the event list before you trust a
+ranking.
+
 ## Metric ids
 
 Defaults match the `software-delivery` kit template. Rename with the `metrics` option.
@@ -87,6 +169,7 @@ Defaults match the `software-delivery` kit template. Rename with the `metrics` o
 | `milestone` | GitHub | 1 per participant per closed milestone, via `creditMilestone` |
 | `item_done` | Azure Boards | effort or story points of a closed item, 1 if it has none |
 | `bug_fixed` | Azure Boards | 1 per closed bug |
+| any | CSV | whatever your `rules` say; metric ids are yours, so match them to the program |
 
 ## Token permissions
 

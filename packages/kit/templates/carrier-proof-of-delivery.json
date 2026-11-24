@@ -1,0 +1,95 @@
+{
+  "meta": {
+    "pitch": "Pay carriers and owner-operators for every delivery that was confirmed with proof of delivery, with a bonus for arriving on time and for damage-free cargo.",
+    "whoPays": "A shipper, a broker or a 3PL that pays independent carriers",
+    "signals": "Delivery confirmed with proof of delivery, delivered inside the window, delivered without damage, delivery rejected or disputed - from a transport management system, a driver app or a spreadsheet export",
+    "idea": "The carrier is paid when the proof of delivery is in, not at the end of a 45-day invoice cycle. A small share is held in a damage-claims reserve and is released on a date, 15 days later, with no paperwork.",
+    "limits": "Harmony does not verify the proof of delivery, route, insure cargo or settle claims. The reserve is released by DATE, not by a claims decision: if a claim is upheld, handle it outside Harmony (the reserve cannot be taken back by the payer once it exists). Every count comes from a record somebody can edit, so review the events before paying."
+  },
+  "program": {
+    "id": "carrier-proof-of-delivery",
+    "name": "Carrier proof of delivery",
+    "industry": "Logistics",
+    "unit": "delivery",
+    "description": "A rate per point, limited by a budget for the period, with a small damage-claims reserve released after the claims window.",
+    "metrics": [
+      {
+        "id": "delivery_confirmed",
+        "label": "Delivery confirmed with proof",
+        "points": 10,
+        "cap": 400
+      },
+      {
+        "id": "delivered_on_time",
+        "label": "Delivered inside the window",
+        "points": 3,
+        "cap": 400
+      },
+      {
+        "id": "damage_free",
+        "label": "Delivered without damage",
+        "points": 2,
+        "cap": 400
+      },
+      {
+        "id": "rejected_delivery",
+        "label": "Delivery rejected or disputed",
+        "points": -15
+      }
+    ],
+    "levels": [
+      {
+        "id": "carrier",
+        "name": "Carrier",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "trusted",
+        "name": "Trusted",
+        "minLifetimePoints": 2000,
+        "multiplier": 1.03
+      },
+      {
+        "id": "preferred",
+        "name": "Preferred",
+        "minLifetimePoints": 8000,
+        "multiplier": 1.08
+      },
+      {
+        "id": "anchor",
+        "name": "Anchor",
+        "minLifetimePoints": 20000,
+        "multiplier": 1.15
+      }
+    ],
+    "payout": {
+      "model": "rate",
+      "rate": 0.3,
+      "budget": 5000
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "On proof of delivery",
+        "share": 0.9,
+        "rule": {
+          "type": "instant"
+        }
+      },
+      {
+        "id": "claims-reserve",
+        "label": "Damage-claims reserve",
+        "share": 0.1,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 15
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 60
+    }
+  }
+}

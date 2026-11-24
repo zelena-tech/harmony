@@ -1,0 +1,83 @@
+{
+  "meta": {
+    "pitch": "Pay suppliers and contractors for the units they delivered and the buyer accepted, with a bonus for being on time and a retention that is released later.",
+    "whoPays": "A company that buys goods or work from many small suppliers or contractors",
+    "signals": "Units delivered and accepted (or an amount-based unit), deliveries on time, units rejected - from a goods-receipt record or a spreadsheet export",
+    "idea": "The supplier sees a payment as soon as the goods are accepted instead of waiting for the next payment run, and the buyer keeps a retention without chasing it.",
+    "limits": "The 10% retention is released on a DATE (30 days after the plan), not on approval: nobody approves it and the payer cannot cancel it once created. Releasing a retention when someone signs off needs an escrow, which is not part of this template. Harmony does not match purchase orders to invoices, judge quality, settle disputes or withhold taxes."
+  },
+  "program": {
+    "id": "supplier-deliveries",
+    "name": "Supplier deliveries",
+    "industry": "Procurement",
+    "unit": "unit",
+    "description": "A rate per point on accepted work, limited by a budget, with a retention released on a date.",
+    "metrics": [
+      {
+        "id": "unit_accepted",
+        "label": "Unit delivered and accepted",
+        "points": 1,
+        "cap": 20000
+      },
+      {
+        "id": "on_time_delivery",
+        "label": "Delivery on or before the agreed date",
+        "points": 25,
+        "cap": 200
+      },
+      {
+        "id": "rejected_unit",
+        "label": "Unit rejected",
+        "points": -3
+      }
+    ],
+    "levels": [
+      {
+        "id": "listed",
+        "name": "Listed",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "approved",
+        "name": "Approved",
+        "minLifetimePoints": 5000,
+        "multiplier": 1.02
+      },
+      {
+        "id": "strategic",
+        "name": "Strategic",
+        "minLifetimePoints": 25000,
+        "multiplier": 1.05
+      }
+    ],
+    "payout": {
+      "model": "rate",
+      "rate": 2,
+      "budget": 20000
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "On acceptance",
+        "share": 0.9,
+        "rule": {
+          "type": "instant"
+        }
+      },
+      {
+        "id": "retention",
+        "label": "Retention",
+        "share": 0.1,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 30
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 90
+    }
+  }
+}

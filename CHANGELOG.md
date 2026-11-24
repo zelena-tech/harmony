@@ -22,7 +22,8 @@ the contracts and their wasm hashes (`contracts/wasm.sha256`) are unchanged.
   structural validation.
 - Harmony Card per person (JSON and SVG) with level, points, pockets and the
   transaction hashes as proof.
-- 11 industry templates in `packages/kit/templates/`.
+- 14 industry templates in `packages/kit/templates/`, including
+  `carrier-proof-of-delivery`, `supplier-deliveries` and `collections-team`.
 - Tested offline and on testnet. Not audited.
 
 ### packages/connectors (new, `@zelena/harmony-connectors`)
@@ -30,6 +31,10 @@ the contracts and their wasm hashes (`contracts/wasm.sha256`) are unchanged.
 - Input connectors for GitHub (merged pull requests, reviews, commits,
   milestones) and Azure Boards (closed items with effort, bugs), and
   `mergeEvents` to unify identities. No dependencies.
+- `csvEvents`: a CSV export (RFC 4180, any delimiter, declared date and number
+  formats) mapped to events by rules, with every unusable row reported in
+  `skipped`. For companies that can export a spreadsheet but cannot give API
+  access.
 - A CSV export for the Stellar Disbursement Platform is in progress in this
   release.
 - Tested offline. Not audited.
@@ -47,6 +52,8 @@ the contracts and their wasm hashes (`contracts/wasm.sha256`) are unchanged.
 - New examples: `examples/quickstart-offline.js`,
   `examples/quickstart-testnet/run.js` and
   `examples/software-team/github-to-plan.js`.
+- `examples/use-cases/run.js`: three runnable cases from a CSV (`carriers`,
+  `suppliers`, `collections`) that stop at the payout plan.
 
 ## 0.1.1 — 2026-10-12
 

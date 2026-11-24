@@ -1,0 +1,29 @@
+{
+  "title": "Carriers paid on proof of delivery",
+  "description": "A shipper pays independent carriers per delivery confirmed with proof of delivery. The CSV is the shipper's delivery export for the month.",
+  "organization": "northwind-freight-demo",
+  "period": { "label": "November 2026", "since": "2026-11-01", "until": "2026-12-01" },
+  "template": "carrier-proof-of-delivery",
+  "mapping": {
+    "participant": "Carrier ID",
+    "name": "Carrier",
+    "date": "Delivered on",
+    "ref": "Order",
+    "rules": [
+      { "metric": "delivery_confirmed", "when": [{ "column": "Status", "equals": "Delivered" }, { "column": "POD ref", "notEmpty": true }] },
+      { "metric": "delivered_on_time", "when": [{ "column": "Status", "equals": "Delivered" }, { "column": "POD ref", "notEmpty": true }, { "column": "Days late", "lte": 0 }] },
+      { "metric": "damage_free", "when": [{ "column": "Status", "equals": "Delivered" }, { "column": "POD ref", "notEmpty": true }, { "column": "Damage", "equals": "None" }] },
+      { "metric": "rejected_delivery", "when": { "column": "Status", "equals": "Rejected" } }
+    ]
+  },
+  "people": {
+    "CAR-01": { "wallet": "generate" },
+    "CAR-02": { "wallet": "generate" },
+    "CAR-03": { "wallet": "generate" },
+    "CAR-04": { "wallet": "generate" },
+    "CAR-05": { "wallet": "generate" },
+    "CAR-06": { "wallet": null },
+    "CAR-07": { "wallet": null }
+  },
+  "lifetime": { "CAR-01": 9000, "CAR-02": 2500 }
+}

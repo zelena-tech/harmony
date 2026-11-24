@@ -1,0 +1,29 @@
+{
+  "title": "Collections team incentive",
+  "description": "A company rewards its accounts-receivable team for what it collected, with more points for older invoices. The CSV is the receivables ledger export; one unit is 1,000 of the currency of the export.",
+  "organization": "contoso-receivables-demo",
+  "period": { "label": "November 2026", "since": "2026-11-01", "until": "2026-12-01" },
+  "template": "collections-team",
+  "mapping": {
+    "participant": "Collector ID",
+    "name": "Collector",
+    "date": "Date",
+    "ref": "Invoice",
+    "rules": [
+      { "metric": "collected_current", "when": [{ "column": "Event", "equals": "Payment" }, { "column": "Days overdue", "lte": 30 }], "value": { "column": "Amount collected", "scale": 0.001 } },
+      { "metric": "collected_31_60", "when": [{ "column": "Event", "equals": "Payment" }, { "column": "Days overdue", "gt": 30, "lte": 60 }], "value": { "column": "Amount collected", "scale": 0.001 } },
+      { "metric": "collected_61_90", "when": [{ "column": "Event", "equals": "Payment" }, { "column": "Days overdue", "gt": 60, "lte": 90 }], "value": { "column": "Amount collected", "scale": 0.001 } },
+      { "metric": "collected_over_90", "when": [{ "column": "Event", "equals": "Payment" }, { "column": "Days overdue", "gt": 90 }], "value": { "column": "Amount collected", "scale": 0.001 } },
+      { "metric": "promise_kept", "when": { "column": "Event", "equals": "Promise kept" } },
+      { "metric": "broken_promise", "when": { "column": "Event", "equals": "Promise broken" } }
+    ]
+  },
+  "people": {
+    "COL-1": { "wallet": "generate" },
+    "COL-2": { "wallet": "generate" },
+    "COL-3": { "wallet": "generate" },
+    "COL-4": { "wallet": "generate" },
+    "COL-5": { "wallet": null }
+  },
+  "lifetime": { "COL-1": 14000, "COL-3": 4000 }
+}

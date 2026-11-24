@@ -39,6 +39,12 @@ const svg = harmony.renderCardSvg(cardJson);
 Why start here: you test your rules with real data and show people the
 ranking before any money moves. Run `examples/quickstart-offline.js`.
 
+No API access yet? A CSV export is enough: `csvEvents` (in
+`packages/connectors`) maps the columns to events, reports every row it could
+not use, and `examples/use-cases/run.js` shows the ranking and a payout preview
+for logistics, supplier payments and collections. See
+[examples/use-cases](../examples/use-cases/README.md).
+
 ## L1 Direct payouts
 
 **You need:** a payer wallet that holds the reward asset (USDC) and some XLM;

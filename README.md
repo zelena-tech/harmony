@@ -23,12 +23,13 @@ contracts/            Soroban contracts (Rust)
 packages/core/        off-chain engine (Node.js): scoring, payout planning,
                       non-custodial payment transactions, Soroban client
 packages/kit/         programs, levels, payout models, pockets, claimable
-                      balances, Harmony Cards, 11 industry templates
-packages/connectors/  work events from GitHub and Azure Boards; export of a
-                      plan to the Stellar Disbursement Platform
+                      balances, Harmony Cards, 14 industry templates
+packages/connectors/  work events from GitHub, Azure Boards and any CSV export;
+                      export of a plan to the Stellar Disbursement Platform
 docs/                 architecture, scoring, payouts, kit, use cases, adoption
                       levels, hackathon guide; docs/audit/ for auditors
-examples/             quickstarts, software team, private payouts
+examples/             quickstarts, software team, use cases from a CSV,
+                      private payouts
 ```
 
 ## Status
@@ -68,7 +69,7 @@ date. Someone who cannot receive yet is not skipped: the money waits and they
 claim it with one signature. Pockets control when money becomes available, not
 where it is spent afterwards.
 
-Read: [kit reference](docs/kit.md) · [use cases and the 11 templates](docs/use-cases.md) ·
+Read: [kit reference](docs/kit.md) · [use cases and the 14 templates](docs/use-cases.md) ·
 [adoption levels](docs/adoption-levels.md) · [build with it in 10 minutes](docs/hackathon.md)
 
 ## How it works (engine and contracts)

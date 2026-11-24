@@ -1,0 +1,101 @@
+{
+  "meta": {
+    "pitch": "An incentive for an accounts-receivable team that pays more for older money collected and for promises to pay that were kept.",
+    "whoPays": "A company, from a pool tied to what its collections team recovers",
+    "signals": "Amount collected by age of the invoice (current, 31-60, 61-90, over 90 days), promises to pay kept and broken - from the receivables ledger or a spreadsheet export",
+    "idea": "Older debt is harder, so it earns more points per unit collected. A small part of the bonus is released at the end of the quarter, which keeps the team interested in collections that stay paid.",
+    "limits": "Harmony does not collect debt, score credit or move invoices: it only turns what the team already recorded into points and a payout. The unit of the collected metrics is yours to choose (the template assumes 1 unit = 1,000 of your currency, and its caps are in those units: 5,000 units is 5 million), so change the caps if your currency is worth much more or less, and the amounts come from a ledger that people can edit: review the events before paying. Only the bonus is on the ledger, never the invoices or the debtors."
+  },
+  "program": {
+    "id": "collections-team",
+    "name": "Collections team incentive",
+    "industry": "Finance",
+    "unit": "thousands collected",
+    "description": "A proportional pool shared by points, with more points per unit the older the invoice, and a small quarter-end pocket.",
+    "metrics": [
+      {
+        "id": "collected_current",
+        "label": "Collected on current invoices, per 1,000",
+        "points": 1,
+        "cap": 5000
+      },
+      {
+        "id": "collected_31_60",
+        "label": "Collected on invoices 31-60 days old, per 1,000",
+        "points": 2,
+        "cap": 4000
+      },
+      {
+        "id": "collected_61_90",
+        "label": "Collected on invoices 61-90 days old, per 1,000",
+        "points": 3,
+        "cap": 3000
+      },
+      {
+        "id": "collected_over_90",
+        "label": "Collected on invoices over 90 days old, per 1,000",
+        "points": 5,
+        "cap": 2500
+      },
+      {
+        "id": "promise_kept",
+        "label": "Promise to pay kept",
+        "points": 5,
+        "cap": 100
+      },
+      {
+        "id": "broken_promise",
+        "label": "Promise to pay broken",
+        "points": -8
+      }
+    ],
+    "minPoints": 100,
+    "levels": [
+      {
+        "id": "collector",
+        "name": "Collector",
+        "minLifetimePoints": 0,
+        "multiplier": 1
+      },
+      {
+        "id": "senior",
+        "name": "Senior collector",
+        "minLifetimePoints": 3000,
+        "multiplier": 1.05
+      },
+      {
+        "id": "lead",
+        "name": "Lead collector",
+        "minLifetimePoints": 12000,
+        "multiplier": 1.1
+      }
+    ],
+    "payout": {
+      "model": "proportional",
+      "pool": 1500
+    },
+    "pockets": [
+      {
+        "id": "now",
+        "label": "Paid now",
+        "share": 0.85,
+        "rule": {
+          "type": "instant"
+        }
+      },
+      {
+        "id": "quarter-end",
+        "label": "Quarter-end release",
+        "share": 0.15,
+        "rule": {
+          "type": "unlocks",
+          "afterDays": 90
+        }
+      }
+    ],
+    "unreachable": {
+      "mode": "hold",
+      "reclaimAfterDays": 120
+    }
+  }
+}

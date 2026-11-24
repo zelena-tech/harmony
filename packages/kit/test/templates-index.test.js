@@ -11,9 +11,10 @@ const { ProgramConfigError } = require('../src/program');
 const IDS = [
   'warehouse-fulfillment', 'last-mile-delivery', 'retail-sales', 'customer-support', 'construction-crew', 'healthcare-shifts',
   'learn-to-earn', 'tip-pool', 'open-source-bounties', 'harvest-piece-rate', 'software-delivery',
+  'carrier-proof-of-delivery', 'supplier-deliveries', 'collections-team',
 ];
 
-test('the catalogue lists the eleven templates with their story', () => {
+test('the catalogue lists the fourteen templates with their story', () => {
   const list = kit.templates();
   assert.deepEqual(list.map((t) => t.id).sort(), [...IDS].sort());
   assert.equal(new Set(list.map((t) => t.id)).size, list.length);
@@ -245,4 +246,36 @@ test('software-delivery caps every metric a team member can inflate from the too
   assert.equal(metrics.bug_fixed, 30);
   assert.equal(metrics.item_done, 200);
   assert.equal(metrics.commit, 100);
+});
+
+test('the carrier, supplier and collections templates cap what a participant or a clerk could inflate', () => {
+  for (const id of ['carrier-proof-of-delivery', 'supplier-deliveries', 'collections-team']) {
+    for (const m of kit.template(id).metrics.filter((x) => x.points > 0)) {
+      assert.ok(m.cap > 0, `${id}.${m.id} needs a cap`);
+    }
+  }
+});
+
+test('the three business templates keep their promises about pockets and payout', () => {
+  const carrier = kit.defineProgram(kit.template('carrier-proof-of-delivery'));
+  assert.equal(carrier.payout.model, 'rate');
+  assert.ok(carrier.payout.budget > 0);
+  const reserve = carrier.pockets.find((k) => k.rule.type === 'unlocks');
+  assert.equal(reserve.rule.afterSeconds, 15 * 86400);
+  assert.ok(reserve.shareBp <= 1500, 'the reserve is small');
+  assert.ok(carrier.metrics.find((m) => m.id === 'rejected_delivery').points < 0);
+
+  const supplier = kit.defineProgram(kit.template('supplier-deliveries'));
+  assert.equal(supplier.payout.model, 'rate');
+  assert.ok(supplier.payout.budget > 0);
+  assert.deepEqual(supplier.pockets.map((k) => [k.rule.type, k.shareBp]), [['instant', 9000], ['unlocks', 1000]]);
+  assert.equal(supplier.pockets[1].rule.afterSeconds, 30 * 86400);
+  assert.match(kit.templates().find((t) => t.id === 'supplier-deliveries').limits, /DATE/);
+
+  const collections = kit.defineProgram(kit.template('collections-team'));
+  assert.equal(collections.payout.model, 'proportional');
+  const pts = Object.fromEntries(collections.metrics.map((m) => [m.id, m.points]));
+  assert.ok(pts.collected_current < pts.collected_31_60 && pts.collected_31_60 < pts.collected_61_90 && pts.collected_61_90 < pts.collected_over_90, 'older money earns more');
+  assert.ok(pts.broken_promise < 0);
+  assert.ok(collections.pockets.some((k) => k.rule.type === 'unlocks'));
 });

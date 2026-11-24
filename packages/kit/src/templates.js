@@ -22,6 +22,9 @@ const FILES = [
   require('../templates/open-source-bounties.json'),
   require('../templates/harvest-piece-rate.json'),
   require('../templates/software-delivery.json'),
+  require('../templates/carrier-proof-of-delivery.json'),
+  require('../templates/supplier-deliveries.json'),
+  require('../templates/collections-team.json'),
 ];
 const BY_ID = new Map(FILES.map((f) => [f.program.id, f]));
 

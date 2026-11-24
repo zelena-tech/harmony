@@ -1,0 +1,51 @@
+PO;Supplier ID;Supplier;Received on;Status;Units received;Units accepted;Units rejected;Agreed date;On time
+PO-7301;SUP-102;Northwind Packaging;26/11/2026;Accepted;800;773;27;27/11/2026;Yes
+PO-7302;SUP-101;Plasticos Ceiba;27/11/2026;Accepted;2.150;1.966;184;27/11/2026;Yes
+PO-7306;SUP-103;Tornillos del Valle;14/11/2026;Accepted;350;320;30;15/11/2026;Yes
+PO-7307;SUP-102;Northwind Packaging;06/11/2026;Accepted;2.000;1.919;81;05/11/2026;No
+PO-7309;SUP-102;Northwind Packaging;26/11/2026;Accepted;1.850;1.850;0;23/11/2026;No
+PO-7311;SUP-102;Northwind Packaging;17/11/2026;Accepted;1.100;1.100;0;16/11/2026;No
+PO-7312;SUP-102;Northwind Packaging;09/11/2026;Partially accepted;500;478;22;09/11/2026;Yes
+PO-7316;SUP-103;Tornillos del Valle;14/11/2026;Accepted;500;500;0;14/11/2026;Yes
+PO-7319;SUP-106;Cajas Horizonte;11/11/2026;Accepted;500;480;20;11/11/2026;Yes
+PO-7407;;;12/11/2026;Pending inspection;1.400;;;13/11/2026;Yes
+PO-7322;SUP-107;Adventure Metals;15/11/2026;Pending inspection;350;;;15/11/2026;Yes
+PO-7325;SUP-101;Plasticos Ceiba;09/11/2026;Accepted;2.150;2.150;0;10/11/2026;Yes
+PO-7326;SUP-101;Plasticos Ceiba;22/11/2026;Partially accepted;500;453;47;20/11/2026;No
+PO-7329;SUP-104;Granos Alba;22/11/2026;Accepted;350;350;0;21/11/2026;No
+PO-7330;SUP-101;Plasticos Ceiba;08/11/2026;Accepted;1.250;1.112;138;07/11/2026;No
+PO-7332;SUP-105;Contoso Textiles;08/11/2026;Accepted;1.700;1.610;90;07/11/2026;No
+PO-7335;SUP-102;Northwind Packaging;25/11/2026;Partially accepted;1.400;1.400;0;24/11/2026;No
+PO-7408;SUP-103;Tornillos del Valle;30/02/2026;Accepted;1.700;1.526;174;03/11/2026;No
+PO-7339;SUP-102;Northwind Packaging;20/11/2026;Partially accepted;350;350;0;21/11/2026;Yes
+PO-7341;SUP-103;Tornillos del Valle;19/11/2026;Accepted;1.550;1.454;96;19/11/2026;Yes
+PO-7345;SUP-103;Tornillos del Valle;07/11/2026;Accepted;500;500;0;06/11/2026;No
+PO-7419;SUP-104;Granos Alba;08/11/2026;Rejected;1.850;0;1.850;09/11/2026;Yes
+PO-7347;SUP-103;Tornillos del Valle;27/11/2026;Accepted;500;500;0;25/11/2026;No
+PO-7351;SUP-106;Cajas Horizonte;06/11/2026;Partially accepted;1.400;1.400;0;06/11/2026;Yes
+PO-7352;SUP-107;Adventure Metals;01/11/2026;Accepted;200;200;0;02/11/2026;Yes
+PO-7353;SUP-102;Northwind Packaging;21/11/2026;Accepted;800;800;0;22/11/2026;Yes
+PO-7356;SUP-106;Cajas Horizonte;04/11/2026;Accepted;1.850;1.850;0;01/11/2026;No
+PO-7412;SUP-102;Northwind Packaging;2026-11-0x;Pending inspection;1.250;;;05/11/2026;Yes
+PO-7359;SUP-101;Plasticos Ceiba;12/11/2026;Partially accepted;950;865;85;13/11/2026;Yes
+PO-7360;SUP-105;Contoso Textiles;12/11/2026;Accepted;350;327;23;09/11/2026;No
+PO-7364;SUP-102;Northwind Packaging;12/11/2026;Accepted;2.000;1.935;65;11/11/2026;No
+PO-7366;SUP-101;Plasticos Ceiba;04/11/2026;Accepted;1.100;1.100;0;05/11/2026;Yes
+PO-7368;SUP-102;Northwind Packaging;08/11/2026;Accepted;1.850;1.850;0;08/11/2026;Yes
+PO-7372;SUP-106;Cajas Horizonte;03/11/2026;Accepted;350;324;26;02/11/2026;No
+PO-7414;SUP-101;Plasticos Ceiba;27/10/2026;Pending inspection;2.150;;;06/11/2026;Yes
+PO-7373;SUP-101;Plasticos Ceiba;26/11/2026;Accepted;500;500;0;25/11/2026;No
+PO-7374;SUP-103;Tornillos del Valle;21/11/2026;Accepted;650;618;32;18/11/2026;No
+PO-7376;SUP-101;Plasticos Ceiba;07/11/2026;Accepted;200;200;0;06/11/2026;No
+PO-7379;SUP-102;Northwind Packaging;11/11/2026;Partially accepted;800;730;70;11/11/2026;Yes
+PO-7383;SUP-102;Northwind Packaging;23/11/2026;Accepted;2.150;1.897;253;22/11/2026;No
+PO-7384;SUP-104;Granos Alba;16/11/2026;Accepted;200;200;0;14/11/2026;No
+PO-7416;SUP-105;Contoso Textiles;03/12/2026;Accepted;650;597;53;04/11/2026;No
+PO-7385;SUP-104;Granos Alba;07/11/2026;Partially accepted;1.400;1.400;0;08/11/2026;Yes
+PO-7389;SUP-103;Tornillos del Valle;08/11/2026;Accepted;1.850;1.850;0;08/11/2026;Yes
+PO-7391;SUP-101;Plasticos Ceiba;08/11/2026;Pending inspection;500;;;07/11/2026;No
+PO-7393;SUP-107;Adventure Metals;12/11/2026;Accepted;1.400;1.400;0;10/11/2026;No
+PO-7397;SUP-101;Plasticos Ceiba;21/11/2026;Accepted;650;650;0;20/11/2026;No
+PO-7399;SUP-101;Plasticos Ceiba;21/11/2026;Accepted;1.700;1.700;0;18/11/2026;No
+PO-7401;SUP-101;Plasticos Ceiba;01/11/2026;Partially accepted;1.250;1.112;138;01/11/2026;Yes
+PO-7404;SUP-104;Granos Alba;28/11/2026;Accepted;650;598;52;27/11/2026;No

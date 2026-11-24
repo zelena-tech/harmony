@@ -83,6 +83,11 @@ const carrierPay = defineProgram({
   forever: the payer can take it back 60 days after the unlock date, so the
   carrier always has the whole 60 days to claim first.
 - **On the ledger:** each payment, tied to the plan id.
+- **Ready-made and runnable:** the template `carrier-proof-of-delivery` (90% on
+  proof of delivery, 10% damage-claims reserve unlocking after 15 days, capped
+  metrics) and a case that runs from a delivery export:
+  `node examples/use-cases/run.js carriers`
+  ([the CSV, the mapping and the output](../examples/use-cases/README.md)).
 - **What Harmony does not do here:** it does not verify the proof of delivery,
   hold cargo insurance or settle disputes.
 
@@ -178,6 +183,10 @@ const supplierPay = defineProgram({
   [audit/README.md](audit/README.md)) or an escrow service such as Trustless
   Work. That is roadmap, not shipped in the kit.
 - **On the ledger:** a payment per supplier and a visible, dated retention.
+- **Ready-made and runnable:** the template `supplier-deliveries` (90% on
+  acceptance, 10% retention unlocking after 30 days) and a case that runs from a
+  Spanish-locale goods-receipt export: `node examples/use-cases/run.js suppliers`
+  ([details](../examples/use-cases/README.md)).
 - **What Harmony does not do here:** it does not match purchase orders to
   invoices, judge quality, resolve disputes or withhold taxes at source. The
   payer cannot cancel a retention once it is created.
@@ -214,6 +223,11 @@ const collections = defineProgram({
 - **Pockets:** the deferred part keeps the team interested in invoices that
   stay paid.
 - **On the ledger:** the bonus payments only, not the invoices or the debtors.
+- **Ready-made and runnable:** the template `collections-team` (more points the
+  older the invoice, 85% now and 15% at quarter end) and a case that runs from a
+  ledger export: `node examples/use-cases/run.js collections`
+  ([details](../examples/use-cases/README.md)). It does not collect debt, score
+  credit or move invoices.
 
 ### (b) Early-payment rewards for customers
 
@@ -284,7 +298,7 @@ integrator's team is the participants.
   links to its source) before paying. `mergeEvents` only applies the map you give it. Azure Boards ids can be
   emails: read the privacy section of the connectors README.
 
-## The 11 templates
+## The 14 templates
 
 All templates are in `packages/kit/templates/`. Each file has `meta` (who pays,
 signals, an idea) and `program`.
@@ -302,6 +316,9 @@ signals, an idea) and `program`.
 | `open-source-bounties` | Technology | proportional, pool 1000 | 100% instant | 4 |
 | `harvest-piece-rate` | Agriculture | rate 0.03, budget 2000 | 85% instant, 15% unlocks 45d | 3 |
 | `software-delivery` | Technology | proportional, pool 1000 | 70% instant, 30% unlocks 30d | 4 |
+| `carrier-proof-of-delivery` | Logistics | rate 0.3, budget 5000 | 90% instant, 10% unlocks 15d | 4 |
+| `supplier-deliveries` | Procurement | rate 2, budget 20000 | 90% instant, 10% unlocks 30d | 3 |
+| `collections-team` | Finance | proportional, pool 1500 | 85% instant, 15% unlocks 90d | 3 |
 
 The pools, rates and shares in templates are examples. Change them with
 `overrides` or copy the template with `template(id)`.

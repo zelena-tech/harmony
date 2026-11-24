@@ -94,10 +94,10 @@ const program = defineProgram({
 });
 ```
 
-Eleven ready-made programs live in `packages/kit/templates/` (one JSON file
+Fourteen ready-made programs live in `packages/kit/templates/` (one JSON file
 each, `{ meta, program }`). `templates()` lists them and `template(id)`
 returns a fresh editable copy of the `program` part. The table is in
-[use-cases.md](use-cases.md#the-11-templates).
+[use-cases.md](use-cases.md#the-14-templates).
 
 ## Scoring
 
