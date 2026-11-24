@@ -15,12 +15,14 @@
       {
         "id": "pr_merged",
         "label": "Pull request merged",
-        "points": 20
+        "points": 20,
+        "cap": 60
       },
       {
         "id": "review",
         "label": "Review done",
-        "points": 8
+        "points": 8,
+        "cap": 120
       },
       {
         "id": "commit",
@@ -37,7 +39,8 @@
       {
         "id": "bug_fixed",
         "label": "Bug fixed",
-        "points": 10
+        "points": 10,
+        "cap": 30
       },
       {
         "id": "milestone",

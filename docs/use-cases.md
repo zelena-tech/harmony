@@ -29,7 +29,7 @@ are new in 0.2.0, tested offline and on testnet, and **not audited**.
   days.
 - **Pockets:** the `unlocks` pocket is a savings habit the payer cannot undo
   (for a person who can receive; if the person has not opened the account, the
-  payer can take it back after the hold date).
+  payer can take it back after the unlock date plus the reclaim window).
 - **On the ledger:** one memo (the plan id) per transaction, the payments and
   claimable balances, and the claims. Not the scores or the orders.
 - **What Harmony does not do here:** it does not read your WMS. You export the
@@ -80,7 +80,8 @@ const carrierPay = defineProgram({
   be taken back by the payer (once the carrier has an account that can receive
   it), it is a promise, not a deposit you can cut if a damage claim arrives
   later. A carrier that never opens an account does not lock the money
-  forever: the payer can take it back after the 60 day hold.
+  forever: the payer can take it back 60 days after the unlock date, so the
+  carrier always has the whole 60 days to claim first.
 - **On the ledger:** each payment, tied to the plan id.
 - **What Harmony does not do here:** it does not verify the proof of delivery,
   hold cargo insurance or settle disputes.
@@ -278,7 +279,9 @@ integrator's team is the participants.
   Pull request titles and logins never go on-chain.
 - **What Harmony does not do here:** it does not judge quality (a merged PR is
   not necessarily a good one), prevent gaming of counts, or map identities for
-  you. `mergeEvents` only applies the map you give it. Azure Boards ids can be
+  you. Every count comes from a tool any team member can edit: the template's
+  caps limit the damage, and a team should review the event list (every event
+  links to its source) before paying. `mergeEvents` only applies the map you give it. Azure Boards ids can be
   emails: read the privacy section of the connectors README.
 
 ## The 11 templates

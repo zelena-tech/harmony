@@ -38,7 +38,7 @@ const r = await azureBoardsEvents({
   since: '2026-03-01', until: '2026-04-01',
   token: myPat, auth: 'pat',                  // 'pat' (Basic) or 'bearer' (Entra ID token)
   participantKey: 'id',                       // 'uniqueName' (default, usually an email) or 'id'
-  maxEffort: 100,                             // default 100: the most one item may credit (see below)
+  maxEffort: 13,                              // default 13: the most one item may credit (see below)
 });
 // r.events     -> item_done (value = effort or story points, else 1, at most maxEffort) and bug_fixed (1)
 // r.clamped    -> ids of the items whose effort was above maxEffort and was cut to it
@@ -48,21 +48,31 @@ const r = await azureBoardsEvents({
 
 **Effort is editable by any board user.** Anybody who can edit a work item can
 change its effort or story points after it is closed, and that number becomes
-points (and money). `maxEffort` (default 100) clamps it: a larger effort counts
-as `maxEffort` and the item is listed in `clamped` so you can review it; a
-missing, zero, negative or non-finite effort counts as 1. Keep a cap on the
-`item_done` metric of your program as well (the `software-delivery` template
-has one), and review the `clamped` list before you pay.
+points (and money). `maxEffort` (default 13, the usual top of a story-point
+scale; raise it if your team estimates in hours or bigger units) clamps it: a
+larger effort counts as `maxEffort` and the item is listed in `clamped` so you
+can review it; a missing, zero, negative or non-finite effort counts as 1. Keep
+a cap on the `item_done` metric of your program as well (the
+`software-delivery` template caps every metric), and review the `clamped` list
+before you pay.
+
+**Every number here comes from a tool that any team member can edit** (merge a
+trivial pull request, approve a review, close a bug, change an effort). The
+caps of the `software-delivery` template limit the damage, they do not remove
+it: a team should review the event list before paying (every event links to its
+source: `ref`) and agree on the weights with the people who will be paid.
 
 Combine sources and map one person across systems:
 
 ```js
 const { mergeEvents } = require('@zelena/harmony-connectors');
-const { events, unmapped } = mergeEvents(github, azure, {
+const { events, unmapped, assumedCanonical } = mergeEvents(github, azure, {
   identities: { 'ana-dev': 'ana', 'ana@example.com': 'ana' },   // lookup ignores case
 });
-// unmapped: ids that were not in the map (kept as they are). An id that is itself
-// a canonical id (a VALUE of the map) is already mapped and is not listed.
+// unmapped:         ids that were not in the map (kept as they are).
+// assumedCanonical: ids that were not in the map but equal a canonical id (a VALUE of the
+//                   map): taken as that person and listed so a collision (two different
+//                   people with the same id) is visible. Review it before you pay.
 ```
 
 ## Metric ids

@@ -3,7 +3,7 @@
 const crypto = require('node:crypto');
 const { HarmonyError, payouts, networks, sdk } = require('@zelena/harmony-core');
 const { toStroops, fromStroops, splitByBasisPoints, MAX_STROOPS } = require('./money');
-const { assertPlanIntegrity, assertSealKey, sealOf } = require('./plan');
+const { assertPlanIntegrity, assertSealKey, sealOf, hasSealKey } = require('./plan');
 
 /**
  * From a plan to UNSIGNED Stellar transactions. Non-custodial: the kit never
@@ -22,17 +22,23 @@ const { assertPlanIntegrity, assertSealKey, sealOf } = require('./plan');
  * payment) is not left out: with `unreachable.mode = 'hold'` the instant pocket
  * becomes a claimable balance that waits for them, and that the payer can take
  * back after `reclaimAfterDays`. Their `unlocks` pockets get the same payer
- * claimant (never earlier than the unlock date), so that money cannot stay
- * locked forever for someone who never activates the account.
+ * claimant, from the later of the hold date and the unlock date plus the
+ * reclaim window, so that money cannot stay locked forever for someone who
+ * never activates the account, and the person always has the whole window
+ * after the unlock date to claim before the payer can.
  *
- * Trust. `planId` is a checksum, not authentication. `build` therefore
- * re-derives every pocket from the PROGRAM and refuses a plan whose pockets,
- * rules, dates or amounts differ (PLAN_ALTERED). It cannot know whether the
- * wallets are the right ones: for that, pass `wallets` (the organization's
- * registered wallets) and/or seal the plan with `sealKey` (see plan()).
+ * Trust. `planId` is a checksum, not authentication. `build` re-derives the
+ * SHAPE of every pocket from the PROGRAM (ids, order, rule, date, split of the
+ * payment) and repeats the plan-level checks (a person once, a wallet once). It
+ * does NOT know who the people are or what they should get: without a
+ * `sealKey`, whoever can edit a plan and recompute its id can still change
+ * wallets, amounts between people, drop payments, move `createdAt` and change
+ * the salt. If a plan ever leaves the server, seal it (`sealKey`, see plan());
+ * `wallets` only limits destinations to registered addresses.
  *
- * Paying twice. `build` looks for a transaction of the payer that carries
- * this plan id as memo and refuses (PLAN_ALREADY_SUBMITTED) if it finds one.
+ * Paying twice. `build` looks through the payer's transactions, back to the
+ * time the plan was made, for one that carries this plan id as memo and
+ * refuses (PLAN_ALREADY_SUBMITTED) if it finds one.
  *
  * A claimable balance costs the payer one base reserve (0.5 XLM) per claimant;
  * the network returns it when the balance is claimed. `build` reports that
@@ -96,6 +102,23 @@ function assertPocketsFromProgram(program, plan) {
   }
 }
 
+/** The plan-level checks of plan(), repeated: a person once, and a wallet once unless sharing is intended. */
+function assertPlanPeople(plan, allowSharedWallets) {
+  const ids = new Set();
+  const owner = new Map();
+  for (const p of plan.payments) {
+    const id = String(p.participantId);
+    if (ids.has(id)) throw new HarmonyError(400, `The plan pays "${id}" twice: a person must appear once.`, { code: 'DUPLICATE_PARTICIPANT' });
+    ids.add(id);
+    if (allowSharedWallets) continue;
+    if (owner.has(p.wallet)) {
+      throw new HarmonyError(409, `"${owner.get(p.wallet)}" and "${id}" have the same wallet: one person could be paid twice. `
+        + 'Fix the wallets, or pass allowSharedWallets: true if sharing is intended.', { code: 'SHARED_WALLET' });
+    }
+    owner.set(p.wallet, id);
+  }
+}
+
 /** Seal check: with a sealKey the plan MUST carry a valid seal. */
 function assertSeal(plan, sealKey) {
   assertSealKey(sealKey);
@@ -107,17 +130,38 @@ function assertSeal(plan, sealKey) {
   }
 }
 
-/** Hashes of the payer's recent transactions that carry `planId` as hash memo. Fails closed. */
-async function findSubmissions(h, payer, planId) {
+const PAGE = 200;
+const DEFAULT_MAX_LOOKUP_PAGES = 25;
+
+/**
+ * Hashes of the payer's own transactions that carry `planId` as hash memo,
+ * paging back (newest first) until a transaction older than the plan (minus a
+ * clock-skew margin) or the end of the list. Fails closed: when the page limit
+ * is reached before that, the answer is unknown, so it throws.
+ */
+async function findSubmissions(h, payer, planId, { since, maxPages }) {
   if (typeof h.transactions !== 'function') {
     throw new HarmonyError(400, 'This horizon cannot list transactions, so it cannot be checked whether the plan was already submitted. '
       + 'Pass checkAlreadySubmitted: false only if the host records submissions itself.', { code: 'CANNOT_CHECK_SUBMISSIONS' });
   }
-  const page = await h.transactions().forAccount(payer).order('desc').limit(200).call();
+  let page = await h.transactions().forAccount(payer).order('desc').limit(PAGE).call();
   const want = Buffer.from(planId, 'hex');
-  return (page.records || [])
-    .filter((r) => r.memo_type === 'hash' && typeof r.memo === 'string' && Buffer.from(r.memo, 'base64').equals(want))
-    .map((r) => r.hash);
+  const hashes = [];
+  for (let pages = 1; ; pages += 1) {
+    const records = page.records || [];
+    for (const r of records) {
+      if (r.source_account === payer && r.memo_type === 'hash' && typeof r.memo === 'string' && Buffer.from(r.memo, 'base64').equals(want)) hashes.push(r.hash);
+    }
+    if (!records.length || typeof page.next !== 'function') return hashes; // the end of the list
+    // Newest first: once a transaction is older than the plan, nothing further back can carry its id.
+    const last = Date.parse(records[records.length - 1].created_at);
+    if (Number.isFinite(last) && last / 1000 < since) return hashes;
+    if (pages >= maxPages) {
+      throw new HarmonyError(400, `Could not check whether the plan was already submitted: ${maxPages} pages of the payer's transactions did not reach back to the time of the plan. `
+        + 'Pass alreadySubmitted from your own records (or raise maxLookupPages).', { code: 'CANNOT_CHECK_SUBMISSIONS', pages: maxPages });
+    }
+    page = await page.next();
+  }
 }
 
 /** Why a recipient cannot take a plain payment of `need` stroops, or null when it can. */
@@ -142,24 +186,42 @@ function receiveProblem(account, asset, need) {
  * @param {number} [input.baseReserveXlm] network base reserve, 0.5 XLM today
  * @param {number} [input.now]       unix seconds, default the clock (same convention as plan())
  * @param {number} [input.maxPlanAgeSeconds] oldest plan that may still be built, default 86400
- * @param {string|Buffer} [input.sealKey]  when given, the plan must carry a valid seal (PLAN_NOT_SEALED / PLAN_ALTERED)
+ * @param {string|Buffer} [input.sealKey]  when given, the plan must carry a valid seal (PLAN_NOT_SEALED / PLAN_ALTERED).
+ *        A present but empty key (undefined, null, '') throws INVALID_SEAL_KEY; a plan that carries a seal and no key
+ *        is refused (PLAN_SEALED_NO_KEY)
  * @param {Array|Set} [input.wallets]      registered wallets of the organization: every payment wallet must be one (UNREGISTERED_DESTINATION)
- * @param {boolean} [input.checkAlreadySubmitted=true]  look for a transaction of the payer with this plan id as memo
- *        in its latest 200 (PLAN_ALREADY_SUBMITTED). A failed lookup is an error, never a pass.
+ * @param {boolean} [input.allowSharedWallets=false]  allow two people to be paid at the same wallet (SHARED_WALLET otherwise)
+ * @param {boolean} [input.checkAlreadySubmitted=true]  look through the payer's transactions, back to the time the
+ *        plan was made, for one with this plan id as memo (PLAN_ALREADY_SUBMITTED). A failed or incomplete lookup is
+ *        an error, never a pass.
+ * @param {number} [input.maxLookupPages=25]  pages of 200 transactions to read at most; if they do not reach back to the
+ *        plan the lookup fails (CANNOT_CHECK_SUBMISSIONS): pass `alreadySubmitted` from the host's own records
  * @param {boolean} [input.alreadySubmitted]  the host knows it was submitted: refuse without looking
+ * @returns {Promise<object>} planId, network, networkPassphrase, asset, payer, xdrs, hashes, operations, skipped, total,
+ *        payerBalance, feeXlm, reserveXlm and `validUntil`: unix seconds until which the transactions can still be
+ *        submitted (the latest `maxTime`). Plan again for the unpaid people only after that time.
  */
-async function build(program, tenant, {
-  plan, payer, horizon, baseReserveXlm = BASE_RESERVE_XLM, now = Math.floor(Date.now() / 1000), maxPlanAgeSeconds = DEFAULT_MAX_PLAN_AGE_SECONDS,
-  sealKey, wallets, checkAlreadySubmitted = true, alreadySubmitted = false,
-}) {
+async function build(program, tenant, input) {
+  const {
+    plan, payer, horizon, baseReserveXlm = BASE_RESERVE_XLM, now = Math.floor(Date.now() / 1000), maxPlanAgeSeconds = DEFAULT_MAX_PLAN_AGE_SECONDS,
+    sealKey, wallets, allowSharedWallets = false, checkAlreadySubmitted = true, alreadySubmitted = false, maxLookupPages = DEFAULT_MAX_LOOKUP_PAGES,
+  } = input || {};
   if (!networks.isAccountId(payer)) throw new HarmonyError(400, 'The payer wallet is not a Stellar account (G + 55 chars).');
+  const keyGiven = hasSealKey(input);
+  if (keyGiven) assertSealKey(sealKey); // sealKey: process.env.MISSING must not silently turn sealing off
+  if (!Number.isInteger(maxLookupPages) || maxLookupPages < 1) throw new HarmonyError(400, 'maxLookupPages must be an integer >= 1.');
   assertPlanIntegrity(plan);
   if (plan.tenantId !== tenant.id || plan.programId !== program.id || plan.network !== tenant.network
     || plan.asset.code !== tenant.rewardAsset.code || plan.asset.issuer !== tenant.rewardAsset.issuer) {
     throw new HarmonyError(400, 'The plan belongs to another tenant, program, network or asset.', { code: 'PLAN_MISMATCH' });
   }
-  if (sealKey !== undefined && sealKey !== null) assertSeal(plan, sealKey);
+  if (keyGiven) assertSeal(plan, sealKey);
+  else if (plan.seal !== undefined) {
+    throw new HarmonyError(400, 'The plan carries a seal but no sealKey was given: pass the key, so that the seal is checked and the plan is known to come from this server.',
+      { code: 'PLAN_SEALED_NO_KEY' });
+  }
   assertPocketsFromProgram(program, plan);
+  assertPlanPeople(plan, allowSharedWallets === true);
   if (wallets !== undefined && wallets !== null) {
     const registered = new Set(wallets);
     for (const p of plan.payments) {
@@ -199,7 +261,7 @@ async function build(program, tenant, {
     throw e;
   }
   if (checkAlreadySubmitted !== false) {
-    const hashes = await findSubmissions(h, payer, plan.planId);
+    const hashes = await findSubmissions(h, payer, plan.planId, { since: plan.createdAt - CLOCK_SKEW_SECONDS, maxPages: maxLookupPages });
     if (hashes.length) {
       throw new HarmonyError(409, 'The payer already has transactions with this plan id as memo: the plan was (at least partly) submitted. '
         + 'Resubmit the SAME signed transactions if some did not arrive; never build this plan again. To pay whoever is missing, plan again.',
@@ -212,13 +274,19 @@ async function build(program, tenant, {
 
   // One network lookup per distinct wallet. Whoever cannot actually receive a plain payment
   // (no account, no trustline, not authorized, or no room under the limit) is "unreachable".
+  // The room on a trustline must hold EVERYTHING the wallet would receive as plain payments, across all
+  // the payments of the plan (a wallet shared by several people receives several).
+  const needByWallet = new Map();
+  for (const p of plan.payments) {
+    const instant = p.pockets.filter((k) => k.rule.type === 'instant').reduce((sum, k) => sum + toStroops(k.amount), 0n);
+    needByWallet.set(p.wallet, (needByWallet.get(p.wallet) || 0n) + instant);
+  }
   const problemByWallet = new Map();
   for (const p of plan.payments) {
     if (problemByWallet.has(p.wallet) || !networks.isAccountId(p.wallet) || p.wallet === payer) continue;
     let acc = null;
     try { acc = await h.loadAccount(p.wallet); } catch (e) { if (!isNotFound(e)) throw e; }
-    const need = p.pockets.filter((k) => k.rule.type === 'instant').reduce((sum, k) => sum + toStroops(k.amount), 0n);
-    problemByWallet.set(p.wallet, receiveProblem(acc, asset, need));
+    problemByWallet.set(p.wallet, receiveProblem(acc, asset, needByWallet.get(p.wallet)));
   }
 
   const ops = [];
@@ -244,8 +312,9 @@ async function build(program, tenant, {
       const kind = k.rule.type === 'instant' ? 'hold' : k.rule.type;
       const at = kind === 'hold' ? holdUntil : k.rule.at;
       // When the payer may take the money back: from `at` (expires, hold); never for an unlocks pocket of
-      // someone who can receive; for someone who cannot, from the later of the unlock and the hold date.
-      const reclaimAt = kind === 'unlocks' ? (reachable ? null : Math.max(at, holdUntil)) : at;
+      // someone who can receive; for someone who cannot, from the later of the hold date and the unlock
+      // date plus the reclaim window, so the person always has the whole window after the unlock date.
+      const reclaimAt = kind === 'unlocks' ? (reachable ? null : Math.max(at + program.unreachable.reclaimAfterSeconds, holdUntil)) : at;
       if (reclaimAt !== null && reclaimAt < now + payouts.TIMEOUT_SECONDS) {
         expired(`The ${kind === 'hold' ? 'hold' : `pocket "${k.id}"`} of ${p.name} would be reclaimable by the payer at ${new Date(reclaimAt * 1000).toISOString()}, `
           + `less than ${payouts.TIMEOUT_SECONDS} s from now: plan again.`, { pocketId: k.id, participantId: p.participantId, reclaimableFrom: reclaimAt });
@@ -289,6 +358,7 @@ async function build(program, tenant, {
   const xdrs = [];
   const hashes = [];
   const operations = [];
+  let validUntil = 0;
   for (let i = 0; i < ops.length; i += OPS_PER_TX) {
     const chunk = ops.slice(i, i + OPS_PER_TX);
     const b = new sdk.TransactionBuilder(account, { fee: payouts.FEE_PER_OP, networkPassphrase: tenant.networkPassphrase });
@@ -296,6 +366,7 @@ async function build(program, tenant, {
     b.addMemo(sdk.Memo.hash(plan.planId));
     // build() increments the account sequence: the next batch is consecutive.
     const tx = b.setTimeout(payouts.TIMEOUT_SECONDS).build();
+    validUntil = Math.max(validUntil, Number(tx.timeBounds.maxTime));
     xdrs.push(tx.toXDR());
     hashes.push(tx.hash().toString('hex'));
     chunk.forEach((o, index) => {
@@ -318,6 +389,7 @@ async function build(program, tenant, {
     payerBalance: fromStroops(assetBalance),
     feeXlm,
     reserveXlm,
+    validUntil,
   };
 }
 

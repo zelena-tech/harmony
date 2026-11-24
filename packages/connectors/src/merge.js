@@ -8,10 +8,13 @@
  * `identities` maps a source id (GitHub login, email, ...) to a canonical id;
  * lookup ignores case. Ids missing from the map are kept as they are and listed
  * in `unmapped` (only when `identities` is given), except an id that is itself
- * a canonical id (it appears as a VALUE in `identities`): that one is already mapped.
+ * a canonical id (it appears as a VALUE in `identities`): that one is taken as
+ * that canonical person and is listed in `assumedCanonical` instead, so a
+ * collision (two different people whose ids happen to be equal) is visible and
+ * can be reviewed before anybody is paid.
  *
  * @param {...object} args connector results, optionally followed by { identities }
- * @returns {{events: Array, people: Array, unmapped: string[]}}
+ * @returns {{events: Array, people: Array, unmapped: string[], assumedCanonical: string[]}}
  */
 function mergeEvents(...args) {
   let identities = null;
@@ -25,11 +28,13 @@ function mergeEvents(...args) {
   const canonical = new Set();
   if (identities) for (const v of Object.values(identities)) canonical.add(String(v).toLowerCase());
   const unmapped = new Set();
+  const assumedCanonical = new Set();
   const canon = (id) => {
     if (!identities) return id;
     const hit = map.get(String(id).toLowerCase());
     if (hit == null) {
-      if (!canonical.has(String(id).toLowerCase())) unmapped.add(id);
+      if (canonical.has(String(id).toLowerCase())) assumedCanonical.add(id);
+      else unmapped.add(id);
       return id;
     }
     return hit;
@@ -44,7 +49,7 @@ function mergeEvents(...args) {
       if (!people.has(id)) people.set(id, { ...p, participantId: id });
     }
   }
-  return { events, people: [...people.values()], unmapped: [...unmapped].sort() };
+  return { events, people: [...people.values()], unmapped: [...unmapped].sort(), assumedCanonical: [...assumedCanonical].sort() };
 }
 
 module.exports = { mergeEvents };

@@ -72,7 +72,8 @@ XLM per claimant of each claimable balance, returned when it is claimed.
   the payer can take it back.
 - **Unlocking pockets** (`unlocks`): savings or retention that the person can
   claim only from a date. The payer can never take it back, except from someone
-  who could not receive yet (no account or no usable trustline), after the hold date.
+  who could not receive yet (no account or no usable trustline), and then only
+  after the unlock date plus the reclaim window.
 - **Hold:** a person with no account or no trustline is not skipped. Their
   money waits as a claimable balance and they claim it with one signature
   that also adds the trustline. The account itself must exist (a first XLM

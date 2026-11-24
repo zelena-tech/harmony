@@ -158,7 +158,6 @@ is unix seconds and fixes the dates of the pockets. `options` can override
 |---|---|---|
 | `DUPLICATE_PARTICIPANT` | 400 | the same participant id appears twice in `standings` |
 | `SHARED_WALLET` | 409 | two different people who qualified have the same wallet (one person could be paid twice). Pass `options.allowSharedWallets: true` if sharing is intended |
-| `POOL_TOO_SMALL` | 409 | `proportional` and `rate` only: the pool is so small that the shares round up to about one stroop each and add up to more than the pool |
 | `NOBODY_QUALIFIED` | 409 | nobody qualified |
 
 | Model | `payout` fields | Rule |
@@ -167,8 +166,9 @@ is unix seconds and fixes the dates of the pockets. `options` can override
 | `topN` | `pool`, `topN`, `base?` | Every qualified person with a wallet gets `base`. The pool is shared by adjusted points among the first `topN`, who get it on top. |
 | `rate` | `rate`, `budget?` | Each person gets `adjusted x rate`. If the total goes above `budget`, everyone is scaled down so the total equals the budget (`rule.scaledToBudget`). |
 
-The split between people is done by core's `planCampaignPayout`, so the kit
-inherits its rules:
+Who is paid, withheld or excluded is decided by core's `planCampaignPayout`, so
+the kit inherits its rules (the amounts are computed by the kit, see "Exact
+money"):
 
 - **Ranking over everybody.** Having a wallet does not change positions.
 - **Withheld shares.** A share that belongs to someone with no valid wallet
@@ -182,21 +182,34 @@ inherits its rules:
   when planning and applied again when building.
 - **Wallet alerts.** `walletChanges` (participant id to `{ hours }`) flags
   people whose wallet changed recently, in `plan.flagged` and `payment.alert`.
-- **Exact money, and where it stops being exact.** The split BETWEEN people is
-  done by core's planner with floating point, rounded to 7 decimals: exact to
-  the stroop for ordinary pools, and `POOL_TOO_SMALL` catches the extreme case.
-  Everything the kit does afterwards is exact integer stroops (BigInt): each
-  payment is a string with 7 decimals, the pockets of a payment add up to it
-  exactly (the rounding remainder goes to the first pocket), and so do the
-  totals and the operations. `money.toStroops` converts without floating-point
-  multiplication: numbers go through `toFixed(7)`, strings must be plain
-  decimals with at most 7 decimals, and a negative, NaN, exponent, text or
-  more-than-7-decimals amount, or one above the int64 maximum, is refused with
-  a `HarmonyError(400, code INVALID_AMOUNT)`.
+- **Exact money, to the stroop.** The kit decides WHO is paid, withheld or
+  excluded with core's planner (so ranks, alerts, wallet checks and the
+  already-paid rule are core's), but it computes the AMOUNTS itself, in integer
+  stroops (BigInt). The prize pool is shared by the people who share it (every
+  qualified person for `proportional` and `rate`; the first `topN` for
+  `topN`, including those without a wallet or already paid): each share is
+  `floor(pool x points / sum of points)` and the stroops left over are handed
+  out one by one by largest remainder, ties going to the better rank. So the
+  shares add up to the pool exactly, no share is a whole stroop away from the
+  real-number share, and a pool of any size is accepted (there is no
+  `POOL_TOO_SMALL`: if the pool has fewer stroops than there are people, some
+  get nothing and are not paid). A `topN` payment is `base` plus that share.
+  Compared with the engine's own floating-point amounts, everybody except rank 1
+  is within 2 stroops; the engine adds its whole rounding residue (up to half a
+  stroop per person) to rank 1.
+  Everything after that is exact too: each payment is a string with 7 decimals,
+  the pockets of a payment add up to it exactly (the rounding remainder goes
+  to the first pocket), and so do the totals and the operations. The caps are
+  applied to the exact amounts. `money.toStroops` converts without
+  floating-point multiplication: numbers go through `toFixed(7)`, strings must
+  be plain decimals with at most 7 decimals, and a negative, NaN, exponent,
+  text or more-than-7-decimals amount, or one above the int64 maximum, is
+  refused with a `HarmonyError(400, code INVALID_AMOUNT)`.
 
 ### The plan id
 
-`plan.planId` is the sha256 of what will be paid plus `plan.salt`, 16 random
+`plan.planId` is the sha256 of what will be paid (tenant, program, network,
+asset, dates, people, wallets, amounts, pockets) plus `plan.salt`, 16 random
 bytes (hex) generated for every plan. It travels on-chain as the transaction
 memo, which ties every payment to its plan. Two things to know:
 
@@ -214,26 +227,54 @@ memo, which ties every payment to its plan. Two things to know:
 
 ### Trusting a plan
 
-`build` re-derives the pockets of every payment from the PROGRAM and refuses
-the plan (`PLAN_ALTERED`, 400) if they differ from it: the same pocket ids in
-the same order, the same rule type, `rule.at = createdAt + afterSeconds` (null
-for instant) and amounts equal to the split of the payment by the program's
-shares. So an edited rule, date or amount cannot get through. What `build`
-cannot know on its own is whether the people and wallets are the right ones.
-Three things close that, in order of strength:
+`build` re-derives the SHAPE of the pockets of every payment from the PROGRAM
+and refuses the plan (`PLAN_ALTERED`, 400) if they differ: the same pocket ids
+in the same order, the same rule type, `rule.at = createdAt + afterSeconds`
+(null for instant) and amounts equal to the split of the payment by the
+program's shares. It also repeats the plan-level checks of `plan`: a person
+once (`DUPLICATE_PARTICIPANT`) and a wallet once (`SHARED_WALLET`, unless
+`allowSharedWallets: true` is passed to `build`).
+
+That is all it can do on its own. **WITHOUT `sealKey`, somebody who can edit
+the plan and recompute its id can still:**
+
+- change wallets (to any address, or to any registered address if `wallets`
+  is given);
+- move amounts between people, within the caps and the payer's balance;
+- remove payments;
+- move `createdAt` inside the freshness window (and so the dates of the
+  pockets, which are re-derived from it);
+- change the `salt`, which also hides an earlier payment of the same plan from
+  the already-submitted check.
+
+Only the shape of the pockets is re-derived. **The rule: if a plan ever leaves
+your server, use `sealKey`.** `wallets` only limits the destinations to the
+registered addresses; it does not say who gets what. Three things close the
+gap, in order of strength:
 
 1. **Keep `plan` and `built` on the server.** Send the browser only what it
    needs to display, and read the plan back from your own storage by id.
 2. **`sealKey`, when the plan must travel through a browser or a queue.**
-   Pass a string or Buffer of at least 32 bytes (otherwise it throws) to
+   Pass a string or Buffer of at least 32 bytes to
    `createProgram({ ..., sealKey })`, or inside the input of the standalone
    `plan` and `build`. `plan()` then adds `seal = HMAC-SHA256(sealKey, planId)`
    (hex) and `build()` REQUIRES a valid seal, compared in constant time:
    `PLAN_NOT_SEALED` if it is missing, `PLAN_ALTERED` if it does not match. The
-   key never leaves the server. Without `sealKey` nothing changes.
+   key never leaves the server. The id covers the network, so a sealed testnet
+   plan cannot be relabelled mainnet. Two guards keep sealing from being turned
+   off by accident: if the `sealKey` property is PRESENT but `undefined`,
+   `null` or empty (for example `sealKey: process.env.PLAN_SEAL_KEY` with the
+   variable unset), `createProgram`, `plan` and `build` throw
+   `INVALID_SEAL_KEY` (400); and `build` refuses a plan that carries a `seal`
+   when no key was given (`PLAN_SEALED_NO_KEY`, 400). Leave the property out to
+   run unsealed.
 3. **`wallets`, defense in depth.** Pass the organization's registered wallets
    (an array or a Set) to `build`: every wallet of the plan must be one of
    them, otherwise `UNREGISTERED_DESTINATION` (400).
+
+**What a seal means.** A seal proves that the plan was made by this server with
+this key. It does not prove that anybody approved it, and previews are sealed
+too. Keep the id of the APPROVED plan on your server and build only that one.
 
 ## Pockets
 
@@ -253,13 +294,13 @@ The exact claimants and predicates (`claimantsFor` in `src/build.js`), with
 |---|---|
 | `expires` | person: `before(at)`; payer: `not(before(at))` |
 | `unlocks`, person who can receive | person: `not(before(at))`; no payer claimant |
-| `unlocks`, person who cannot receive yet (`hold` mode) | person: `not(before(at))`; payer: `not(before(max(at, holdUntil)))` |
+| `unlocks`, person who cannot receive yet (`hold` mode) | person: `not(before(at))`; payer: `not(before(max(at + reclaimAfterSeconds, holdUntil)))`, so the person always has the whole reclaim window after the unlock date |
 | `hold` (an `instant` pocket for someone who cannot receive yet) | person: unconditional; payer: `not(before(holdUntil))`, with `holdUntil = createdAt + reclaimAfterDays` |
 
 **The hold rule.** After the hold date the payer can take the money back. A
 person who never opens the account therefore cannot lock the money forever, and
-neither can an `unlocks` pocket: it gets the payer claimant above, never
-earlier than its own unlock date. `built.operations[].payerCanReclaimFrom`
+neither can an `unlocks` pocket: it gets the payer claimant above, from the
+unlock date plus the reclaim window (never at the same second as the person). `built.operations[].payerCanReclaimFrom`
 reports the date, and `reason` says why the person was treated as unable to
 receive.
 
@@ -306,22 +347,32 @@ const built = await harmony.build({ plan, payer });   // payer: G... address
 const receipt = await harmony.submit({ built, signedXdrs });
 ```
 
-`build(program, tenant, input)` takes `plan`, `payer`, `horizon?`,
-`baseReserveXlm?` and:
+`build(program, tenant, input)` takes these inputs:
 
 | Input | Default | Meaning |
 |---|---|---|
+| `plan` | required | the `plan()` result |
+| `payer` | required | the account that will sign (`G...`) |
+| `horizon` | the tenant's | injectable (`loadAccount`, `transactions`) for tests |
+| `baseReserveXlm` | 0.5 | network base reserve |
 | `now` | the clock | unix seconds, the same convention as `plan()` |
 | `maxPlanAgeSeconds` | 86400 | oldest plan that may still be built |
-| `sealKey` | none | require a valid seal (see [Trusting a plan](#trusting-a-plan)) |
+| `sealKey` | none | require a valid seal (see [Trusting a plan](#trusting-a-plan)); a present but empty key throws `INVALID_SEAL_KEY` |
 | `wallets` | none | registered wallets: every payment wallet must be one |
+| `allowSharedWallets` | `false` | allow two people at the same wallet (`SHARED_WALLET` otherwise) |
 | `checkAlreadySubmitted` | `true` | look for a previous submission of this plan |
 | `alreadySubmitted` | `false` | the host knows it was submitted: refuse without a lookup |
+| `maxLookupPages` | 25 | pages of 200 transactions the lookup may read at most |
+
+and returns `planId`, `network`, `networkPassphrase`, `asset`, `payer`, `xdrs`,
+`hashes`, `operations`, `skipped`, `total`, `payerBalance`, `feeXlm`,
+`reserveXlm` and `validUntil`: the unix time until which the transactions can
+still be submitted (the latest `maxTime`).
 
 `build` checks, in order: the payer address; plan integrity; that the plan
 belongs to this tenant, program, network and asset (`PLAN_MISMATCH`); the seal
 (if a `sealKey` is given); that the pockets match the program
-(`PLAN_ALTERED`); the `wallets` list; on mainnet, that the payer is the tenant's registered
+(`PLAN_ALTERED`); a person once and a wallet once (`DUPLICATE_PARTICIPANT`, `SHARED_WALLET`); the `wallets` list; on mainnet, that the payer is the tenant's registered
 `payerWallet` (`UNEXPECTED_PAYER`); freshness; the caps; that the plan was not
 already submitted; the payer's asset balance (`INSUFFICIENT_BALANCE`) and XLM
 (`INSUFFICIENT_XLM`). It loads each recipient once to learn whether it can
@@ -340,15 +391,22 @@ date in the past is harmless for somebody who can receive: that pocket is
 simply claimable at once.
 
 **Already submitted (`PLAN_ALREADY_SUBMITTED`, 409).** Before building,
-`build` reads the payer's latest 200 transactions from Horizon and refuses if
-any has the plan id as hash memo; `error.hashes` lists them. This is evidence
-found on the ledger, not a guarantee: a payer with more than 200 newer
-transactions would not show it. The host's own record is the primary control:
-mark the plan as submitted when you sign, and pass `alreadySubmitted: true` (no
-lookup is made). If the lookup itself fails, the error propagates: `build`
-fails closed. A horizon object without `transactions()` raises
-`CANNOT_CHECK_SUBMISSIONS`; pass `checkAlreadySubmitted: false` only when the
-host records submissions itself.
+`build` pages back through the payer's transactions (newest first, 200 per
+page) until it reaches one older than the plan (its `createdAt` minus 5
+minutes) or the list ends, and refuses if a transaction whose source is the
+payer has the plan id as hash memo; `error.hashes` lists them. It reads at
+most `maxLookupPages` pages (default 25). If it does not get back to the time
+of the plan within them, it cannot know, so it fails closed with
+`CANNOT_CHECK_SUBMISSIONS`: pass `alreadySubmitted` from the host's own
+records instead (or raise `maxLookupPages`). This is evidence found on the
+ledger, not a guarantee: the host's own record is the primary control. Mark the
+plan as submitted when you sign, and pass `alreadySubmitted: true` (no lookup
+is made). If the lookup itself fails, the error propagates: `build` fails
+closed. A horizon object without `transactions()` raises
+`CANNOT_CHECK_SUBMISSIONS` too; pass `checkAlreadySubmitted: false` only when
+the host records submissions itself. A changed `salt` changes the plan id, so
+an unsealed plan whose salt was edited is not found (see
+[Trusting a plan](#trusting-a-plan)).
 
 `submit` accepts a signed transaction only if all of these hold, and checks
 everything before sending anything:
@@ -399,10 +457,14 @@ are two kinds of failure, and they need different handling:
 2. **Record `submitted` as you go.** Keep `error.submitted` (and, after
    success, `receipt.transactions`) with the plan, and mark the plan as
    submitted before you hand the XDRs to the payer.
-3. **On `TRANSACTION_REJECTED` the later transactions were not sent.** Whoever
-   they would have paid is unpaid and needs a NEW plan: call `plan` again with
-   `previous` (core's `payouts.summarizePrevious` of what was already paid)
-   so that the people paid by the transactions in `submitted` are left out.
+3. **On `TRANSACTION_REJECTED` the later transactions were not sent, but they
+   stay valid until `built.validUntil`.** Whoever they would have paid is
+   unpaid and needs a NEW plan: call `plan` again with `previous` (core's
+   `payouts.summarizePrevious` of what was already paid) so that the people paid
+   by the transactions in `submitted` are left out. Do that only AFTER
+   `validUntil` has passed (the unsent signed transactions can no longer be
+   applied), or never hand the old signed transactions to anything that could
+   still submit them. Planning earlier could pay the same people twice.
 
 ## Claiming
 
@@ -430,7 +492,10 @@ it, so someone who never held the asset claims **with one signature**. Up to
 19 claims go in a transaction. The account must already exist (a first XLM
 deposit, enough for fees and the trustline reserve); otherwise it fails with
 `ACCOUNT_NOT_FOUND`. `submitClaim` accepts only the asset's trustline and
-claim operations, built for that wallet.
+claim operations, built for that wallet. Like `submit`, it tells a definitive
+rejection (502, `TRANSACTION_REJECTED`, result codes) from an unknown outcome
+(504, `SUBMISSION_UNKNOWN`: timeout, 5xx, network error; resubmitting the same
+signed claim is safe, the network deduplicates by hash).
 
 The payer uses the same functions to take back an expired pocket or an
 unclaimed hold.
@@ -450,27 +515,34 @@ Text is escaped, because names come from the host.
 ## API of `createProgram`
 
 ```js
+const crypto = require('node:crypto');
 const { createProgram } = require('./packages/kit/src');
+
+// In production load the same 32+ random bytes from your secret store. If the property is
+// present it must hold a real key: undefined, null or '' throw INVALID_SEAL_KEY.
+const sealKey = crypto.randomBytes(32);
 
 const harmony = createProgram({
   tenant: { id: 'acme-demo', network: 'testnet' },   // config or defineTenant() result
   program: 'last-mile-delivery',                     // template id, definition or defineProgram() result
   overrides: { payout: { model: 'rate', rate: 0.02, budget: 800 } }, // optional, replaces whole fields
-  sealKey: process.env.PLAN_SEAL_KEY,                // optional, >= 32 bytes: seal every plan
+  sealKey,                                           // optional, >= 32 bytes: seal every plan
 });
 ```
 
 `overrides` is a **shallow merge**: `{ ...template, ...overrides }`. Giving
 `payout` replaces the entire payout object, and giving `metrics` replaces the
 whole metrics array (it does not add to it). `sealKey` is described in
-[Trusting a plan](#trusting-a-plan). The result has:
+[Trusting a plan](#trusting-a-plan): leave it out to run unsealed, but never
+pass a value that may be missing (`sealKey: process.env.X` throws when `X` is
+unset). The result has:
 
 | Member | Does |
 |---|---|
 | `tenant`, `program` | the frozen tenant and program |
 | `score(input)` | standings and totals |
 | `plan(input)` | payout plan (pure) |
-| `build(input)` | unsigned XDR (`{ plan, payer, horizon?, baseReserveXlm?, now?, maxPlanAgeSeconds?, wallets?, checkAlreadySubmitted?, alreadySubmitted? }`) |
+| `build(input)` | unsigned XDR (inputs in the table above) |
 | `submit(input)` | validate and send (`{ built, signedXdrs, horizon?, verifySignatures? }`) |
 | `listClaimable(input)`, `buildClaim(input)`, `submitClaim(input)` | the person's side |
 | `card(input)`, `renderCardSvg(card)` | the Harmony Card |

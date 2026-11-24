@@ -376,18 +376,23 @@ test('D: two different participants with the same wallet are refused unless allo
   assert.equal(kit.plan(simpleProgram({ minPoints: 40 }), tenant(), { standings: some, people, now: NOW }).payments.length, 2);
 });
 
-test('D: a pool so small that the shares round up past it is refused (proportional and rate)', () => {
+test('D: a pool of about one stroop per person is shared exactly, not refused (proportional and rate)', () => {
   const points = {};
   for (let i = 0; i < 3000; i++) points[`p${i}`] = 1;
   const small = simpleProgram({ payout: { model: 'proportional', pool: 0.0011 } });
   const { standings } = scoreOf(small, points);
   const people = peopleOf(Object.keys(points));
-  assert.throws(() => kit.plan(small, tenant(), { standings, people, now: NOW }), (e) => e.statusCode === 409 && e.code === 'POOL_TOO_SMALL');
+  // This used to be POOL_TOO_SMALL: the engine's rounded shares added up past the pool. The kit now splits exactly.
+  const p = kit.plan(small, tenant(), { standings, people, now: NOW });
+  assert.equal(p.total, '0.0011000');
+  assert.equal(p.payments.length, 3000);
 
   // The same through the rate model: due = points x rate, 3000 x 0.00000036667
   const rate = simpleProgram({ payout: { model: 'rate', rate: 0.00000036667 } });
   const r = scoreOf(rate, points);
-  assert.throws(() => kit.plan(rate, tenant(), { standings: r.standings, people, now: NOW, options: { budget: 0.0011 } }), (e) => e.code === 'POOL_TOO_SMALL');
+  const scaled = kit.plan(rate, tenant(), { standings: r.standings, people, now: NOW, options: { budget: 0.001 } });
+  assert.equal(scaled.total, '0.0010000');
+  assert.equal(scaled.rule.scaledToBudget, true);
 
   // A pool that shares evenly is fine, and so is the whole existing range of ordinary pools.
   const fine = simpleProgram({ payout: { model: 'proportional', pool: 100 } });

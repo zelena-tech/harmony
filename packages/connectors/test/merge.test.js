@@ -37,7 +37,7 @@ test('inputs are not mutated and extra event fields survive', () => {
 });
 
 test('empty and missing results are tolerated', () => {
-  assert.deepEqual(mergeEvents(), { events: [], people: [], unmapped: [] });
+  assert.deepEqual(mergeEvents(), { events: [], people: [], unmapped: [], assumedCanonical: [] });
   assert.deepEqual(mergeEvents({}, null).events, []);
 });
 
@@ -47,4 +47,17 @@ test('an id that is already a canonical id is not reported as unmapped', () => {
     { identities });
   assert.deepEqual(r.events.map((e) => e.participantId), ['ana', 'ben-dev', 'ana', 'ANA', 'zed']);
   assert.deepEqual(r.unmapped, ['ben-dev', 'zed'], 'ana and ANA are canonical (case ignored); the others are not in the map');
+  assert.deepEqual(r.assumedCanonical, ['ANA', 'ana'], 'but they are not hidden: they were taken as the canonical person because the id matches');
+});
+
+test('a collision between an unmapped id and a canonical id is visible in assumedCanonical', () => {
+  // Two different people: the one mapped to "ana", and an unrelated GitHub user whose login is "ana".
+  const github = { events: [{ participantId: 'ana-dev', metric: 'pr_merged', value: 1 }, { participantId: 'ana', metric: 'pr_merged', value: 1 }], people: [] };
+  const azure = { events: [{ participantId: 'ana@example.com', metric: 'item_done', value: 3 }], people: [] };
+  const r = mergeEvents(github, azure, { identities: { 'ana-dev': 'ana', 'ana@example.com': 'ana' } });
+  assert.deepEqual(r.events.map((e) => e.participantId), ['ana', 'ana', 'ana'], 'merged into one person, as documented');
+  assert.deepEqual(r.unmapped, []);
+  assert.deepEqual(r.assumedCanonical, ['ana'], 'the host can see the id was assumed and review it');
+  // Without identities nothing is assumed.
+  assert.deepEqual(mergeEvents(github, azure).assumedCanonical, []);
 });

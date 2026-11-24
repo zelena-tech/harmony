@@ -89,8 +89,8 @@ test('A: with a sealKey the plan carries an HMAC of its id and build() requires 
   await refuses({ ...sealed, seal: 'zz' }, 'PLAN_ALTERED');
   await refuses({ ...sealed, seal: sealed.seal.slice(0, 62) }, 'PLAN_ALTERED');
   await refuses(sealed, 'PLAN_ALTERED', crypto.randomBytes(32)); // sealed with another key
-  // Without a key on the build side the seal is not looked at (nothing changes).
-  assert.ok(await buildOf(s, { plan: sealed }));
+  // A plan that carries a seal is never built without the key: the seal would silently not be checked.
+  await assert.rejects(buildOf(s, { plan: sealed }), (e) => e.statusCode === 400 && e.code === 'PLAN_SEALED_NO_KEY');
 });
 
 test('A: a seal key shorter than 32 bytes is refused, as a string or as a Buffer', async () => {
@@ -194,14 +194,18 @@ test('B: the memo is compared as bytes; other memos and other memo types do not 
   const s = scenario({ points: { a: 1 } });
   const listing = (records) => ({ ...s.horizon, transactions: () => ({ forAccount() { return this; }, order() { return this; }, limit() { return this; }, call: async () => ({ records }) }) });
   const b64 = (hex) => Buffer.from(hex, 'hex').toString('base64');
+  const payer = s.payer.publicKey();
+  const at = { source_account: payer, created_at: new Date(NOW * 1000).toISOString() };
   const harmless = [
-    { hash: 'h1', memo_type: 'text', memo: b64(s.plan.planId) },                  // right bytes, wrong memo type
-    { hash: 'h2', memo_type: 'hash', memo: b64('ab'.repeat(32)) },                // another plan
-    { hash: 'h3', memo_type: 'hash', memo: s.plan.planId },                       // hex, not base64: not what Horizon returns
-    { hash: 'h4', memo_type: 'none' },
+    { ...at, hash: 'h1', memo_type: 'text', memo: b64(s.plan.planId) },                  // right bytes, wrong memo type
+    { ...at, hash: 'h2', memo_type: 'hash', memo: b64('ab'.repeat(32)) },                // another plan
+    { ...at, hash: 'h3', memo_type: 'hash', memo: s.plan.planId },                       // hex, not base64: not what Horizon returns
+    { ...at, hash: 'h4', memo_type: 'none' },
+    // the right memo, but a transaction of somebody else that merely involves the payer
+    { ...at, source_account: wallet(), hash: 'h6', memo_type: 'hash', memo: b64(s.plan.planId) },
   ];
   assert.ok(await buildOf(s, { horizon: listing(harmless) }));
-  await assert.rejects(buildOf(s, { horizon: listing([...harmless, { hash: 'h5', memo_type: 'hash', memo: b64(s.plan.planId) }]) }),
+  await assert.rejects(buildOf(s, { horizon: listing([...harmless, { ...at, hash: 'h5', memo_type: 'hash', memo: b64(s.plan.planId) }]) }),
     (e) => e.code === 'PLAN_ALREADY_SUBMITTED' && e.hashes.length === 1 && e.hashes[0] === 'h5');
 });
 
@@ -231,7 +235,7 @@ test('B: checkAlreadySubmitted: false skips the lookup; alreadySubmitted: true r
 // ── C. an unlocks pocket for somebody who never activates ──────────────────
 
 test('C: the unlocks pocket of somebody who cannot receive gets a payer claimant, never before the unlock', async () => {
-  for (const [reclaimAfterDays, expectedDays] of [[10, 60], [90, 90]]) {
+  for (const [reclaimAfterDays, expectedDays] of [[10, 70], [90, 150]]) { // the later of the hold date and unlock + window
     const program = simpleProgram({ pockets: THREE_POCKETS, unreachable: { mode: 'hold', reclaimAfterDays } });
     const s = scenario({ program, points: { a: 60, b: 40, c: 10 }, funded: false });
     const [a, b, c] = s.plan.payments.map((p) => p.wallet);
@@ -250,7 +254,8 @@ test('C: the unlocks pocket of somebody who cannot receive gets a payer claimant
     // Somebody who can receive: nobody can ever take an unlocks pocket back.
     assert.equal(unlocks(a)[0].payerCanReclaimFrom, null);
     assert.equal(unlocks(a)[0].reason, undefined);
-    // Somebody who cannot: the payer can, from max(unlock date, hold date).
+    // Somebody who cannot: the payer can, from max(unlock date + reclaim window, hold date): the person always
+    // has the whole window after the unlock date to claim first.
     for (const w of [b, c]) {
       const [u] = unlocks(w);
       assert.equal(u.payerCanReclaimFrom, reclaim);

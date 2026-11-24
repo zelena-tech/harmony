@@ -111,11 +111,11 @@ test('item_done value: first positive effort field, then 1; bugs are bug_fixed w
 
 test('custom effortFields, bugTypes and metric ids', async () => {
   const fetch = boardFetch([
-    item(1, 'Story', person('ana'), { 'Custom.Size': 21 }),
+    item(1, 'Story', person('ana'), { 'Custom.Size': 8 }),
     item(2, 'Defect', person('ben')),
   ]);
   const r = await run(fetch, { effortFields: ['Custom.Size'], bugTypes: ['Defect'], metrics: { item_done: 'done', bug_fixed: 'fixed' } });
-  assert.deepEqual(r.events.map((e) => [e.metric, e.value]), [['done', 21], ['fixed', 1]]);
+  assert.deepEqual(r.events.map((e) => [e.metric, e.value]), [['done', 8], ['fixed', 1]]);
 });
 
 test('items without an assignee are reported, never credited to a made-up participant', async () => {
@@ -188,12 +188,12 @@ test('input validation', async () => {
   assert.equal(fetch.calls.length, 0);
 });
 
-test('maxEffort (default 100) clamps an edited effort and lists the item; bad efforts count as 1', async () => {
+test('maxEffort (default 13) clamps an edited effort and lists the item; bad efforts count as 1', async () => {
   const fetch = () => boardFetch([
     item(1, 'User Story', person('ana'), { [EFFORT]: 5 }),
     item(2, 'User Story', person('mallory'), { [EFFORT]: 1e308 }),
-    item(3, 'User Story', person('mallory'), { [EFFORT]: 100 }),
-    item(4, 'User Story', person('mallory'), { [EFFORT]: 100.5 }),
+    item(3, 'User Story', person('mallory'), { [EFFORT]: 13 }),
+    item(4, 'User Story', person('mallory'), { [EFFORT]: 13.5 }),
     item(5, 'User Story', person('ben'), { [EFFORT]: -7 }),
     item(6, 'User Story', person('ben'), { [EFFORT]: 'lots' }),
     item(7, 'User Story', person('cai'), { [EFFORT]: Infinity }),
@@ -203,9 +203,9 @@ test('maxEffort (default 100) clamps an edited effort and lists the item; bad ef
   const r = await run(fetch());
   assert.deepEqual(r.events.map((e) => [e.participantId.split('@')[0], e.metric, e.value]), [
     ['ana', 'item_done', 5],
-    ['mallory', 'item_done', 100],
-    ['mallory', 'item_done', 100],
-    ['mallory', 'item_done', 100],
+    ['mallory', 'item_done', 13],
+    ['mallory', 'item_done', 13],
+    ['mallory', 'item_done', 13],
     ['ben', 'item_done', 1],
     ['ben', 'item_done', 1],
     ['cai', 'item_done', 1], // Infinity is serialized as null by JSON, which counts as 1
@@ -216,6 +216,8 @@ test('maxEffort (default 100) clamps an edited effort and lists the item; bad ef
 
   const custom = await run(fetch(), { maxEffort: 8 });
   assert.deepEqual(custom.events.filter((e) => e.participantId.startsWith('mallory')).map((e) => e.value), [8, 8, 8]);
+  const wide = await run(fetch(), { maxEffort: 100 });
+  assert.deepEqual(wide.events.filter((e) => e.participantId.startsWith('mallory')).map((e) => e.value), [100, 13, 13.5], 'a team that estimates in bigger units raises the limit');
   assert.deepEqual(custom.clamped, [2, 3, 4]);
   assert.deepEqual((await run(boardFetch([item(1, 'Task', person('ana'), { [EFFORT]: 3 })]))).clamped, []);
   for (const bad of [0, -1, NaN, Infinity, '100', null]) await assert.rejects(run(fetch(), { maxEffort: bad }), TypeError, String(bad));

@@ -230,9 +230,11 @@ test('validateOperations: the payer can never take the money back while the pers
   invalid(signedTx([claimable([new C(R, before(T)), new C(P, notBefore(T - 1))])]), 'UNEXPECTED_PREDICATE');
   // payer "before" instead of "not before"
   invalid(signedTx([claimable([new C(R, before(T)), new C(P, before(T))])]), 'UNEXPECTED_PREDICATE');
-  // a locked pocket may have a payer claimant only from the unlock date on
+  // a locked pocket may have a payer claimant only after the unlock date
   invalid(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T - 1))])]), 'UNEXPECTED_PREDICATE');
-  assert.equal(validateOperations(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T))])]), ctx()).length, 1);
+  // ...and strictly after it: at the same second both could claim, and the payer could win the race
+  invalid(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T))])]), 'UNEXPECTED_PREDICATE');
+  assert.equal(validateOperations(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T + 1))])]), ctx()).length, 1);
   assert.equal(validateOperations(signedTx([claimable([new C(R, notBefore(T)), new C(P, notBefore(T + 10))])]), ctx()).length, 1);
   // compound predicates are not something the kit builds
   invalid(signedTx([claimable([new C(R, C.predicateAnd(before(T), before(T + 5))), new C(P, notBefore(T + 5))])]), 'UNEXPECTED_PREDICATE');

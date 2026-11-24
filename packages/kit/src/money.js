@@ -60,4 +60,30 @@ function splitByBasisPoints(total, bps) {
   return parts;
 }
 
-module.exports = { STROOPS_PER_UNIT, MAX_STROOPS, toStroops, fromStroops, splitByBasisPoints };
+/**
+ * Splits `total` stroops between people in proportion to their `weights`
+ * (positive integers, as BigInt), exactly: each share is
+ * `floor(total x weight / sum)`, and the stroops left over are handed out one
+ * by one by largest remainder (`total x weight mod sum`), ties going to the
+ * earlier position. The shares always add up to exactly `total`, and no share
+ * differs from the real-number share by a whole stroop or more.
+ *
+ * @param {bigint} total
+ * @param {bigint[]} weights in rank order (earlier = better)
+ * @returns {bigint[]}
+ */
+function splitProportional(total, weights) {
+  if (!weights.length) return [];
+  const sum = weights.reduce((s, w) => s + w, 0n);
+  if (sum <= 0n) throw new RangeError('The weights must add up to more than zero');
+  const parts = weights.map((w) => (total * w) / sum);
+  let left = total - parts.reduce((s, v) => s + v, 0n);
+  if (left > 0n) {
+    const order = weights.map((w, i) => ({ i, rem: (total * w) % sum }))
+      .sort((a, b) => (a.rem === b.rem ? a.i - b.i : (a.rem > b.rem ? -1 : 1)));
+    for (let k = 0; left > 0n; k += 1, left -= 1n) parts[order[k].i] += 1n;
+  }
+  return parts;
+}
+
+module.exports = { STROOPS_PER_UNIT, MAX_STROOPS, toStroops, fromStroops, splitByBasisPoints, splitProportional };

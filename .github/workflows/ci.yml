@@ -71,3 +71,19 @@ jobs:
       - name: Test
         working-directory: packages/kit
         run: npm test
+
+  connectors:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [20, 22, 24]
+    defaults:
+      run:
+        working-directory: packages/connectors
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node }}
+      # No dependencies, so nothing to install.
+      - run: npm test

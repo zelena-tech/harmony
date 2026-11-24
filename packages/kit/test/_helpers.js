@@ -80,6 +80,7 @@ function account({
  *   timeoutOn     Set of submission indexes that are APPLIED but answered with a 504
  *   dropOn        Set of submission indexes that are NOT applied and answered with a 504
  *   lookupError   transactions() lookups fail with this error
+ *   ledgerTime    unix seconds stamped (created_at) on the transactions it applies, default NOW
  *   claimable / claimablePages   what claimableBalances() returns: one page, or several pages
  *                 that `page.next()` walks through (an empty page after the last, as Horizon does)
  *
@@ -87,13 +88,13 @@ function account({
  * `appliedStroops()` is the sum of every payment and claimable balance applied.
  */
 function fakeHorizon(accounts, {
-  failAt = null, claimable = [], claimablePages = null, timeoutOn = null, dropOn = null, lookupError = null,
+  failAt = null, claimable = [], claimablePages = null, timeoutOn = null, dropOn = null, lookupError = null, ledgerTime = NOW,
 } = {}) {
   const submitted = [];
   const history = []; // transaction records as Horizon lists them, oldest first
   const stored = new Map(); // hash -> result
   const seqs = new Map();
-  const calls = { claimant: [], asset: [], limit: [], pages: 0, transactions: 0, lookups: [] };
+  const calls = { claimant: [], asset: [], limit: [], pages: 0, transactions: 0, transactionPages: 0, lookups: [] };
   const pages = claimablePages || [claimable];
   const pageAt = (i) => { calls.pages += 1; return { records: pages[i] || [], next: async () => pageAt(i + 1) }; };
   let attempts = 0;
@@ -106,6 +107,11 @@ function fakeHorizon(accounts, {
   return {
     submitted,
     calls,
+    history,
+    /** n unrelated transactions of `account`, newer than everything so far, stamped `at` (unix seconds) */
+    noise: (account, n, at = ledgerTime) => {
+      for (let i = 0; i < n; i++) history.push({ hash: `noise-${history.length}`, source_account: account, created_at: new Date(at * 1000).toISOString(), memo_type: 'none' });
+    },
     appliedStroops: () => submitted.reduce((sum, tx) => sum + tx.operations.reduce((t, op) => (
       t + (op.type === 'payment' || op.type === 'createClaimableBalance' ? BigInt(Math.round(Number(op.amount) * 1e7)) : 0n)), 0n), 0n),
     loadAccount: async (id) => {
@@ -128,6 +134,7 @@ function fakeHorizon(accounts, {
       history.push({
         hash,
         source_account: tx.source,
+        created_at: new Date(ledgerTime * 1000).toISOString(),
         memo_type: tx.memo && tx.memo.type === 'hash' ? 'hash' : 'none',
         ...(tx.memo && tx.memo.type === 'hash' ? { memo: Buffer.from(tx.memo.value).toString('base64') } : {}),
       });
@@ -146,7 +153,10 @@ function fakeHorizon(accounts, {
         call: async () => {
           if (lookupError) throw lookupError;
           const mine = history.filter((r) => r.source_account === q.account);
-          return { records: (q.direction === 'desc' ? mine.slice().reverse() : mine).slice(0, q.max) };
+          const ordered = q.direction === 'desc' ? mine.slice().reverse() : mine;
+          // Pages of `limit` records, walked by page.next(); an empty page after the last, as Horizon does.
+          const pageAt = (i) => { calls.transactionPages += 1; return { records: ordered.slice(i * q.max, (i + 1) * q.max), next: async () => pageAt(i + 1) }; };
+          return pageAt(0);
         },
       };
       return b;

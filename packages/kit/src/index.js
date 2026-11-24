@@ -3,7 +3,7 @@
 const { defineTenant, HarmonyError } = require('@zelena/harmony-core');
 const { defineProgram, isProgram, ProgramConfigError, PAYOUT_MODELS, POCKET_RULES } = require('./program');
 const { score, levelFor } = require('./score');
-const { plan, planIdOf, assertPlanIntegrity, sealOf, assertSealKey } = require('./plan');
+const { plan, planIdOf, assertPlanIntegrity, sealOf, assertSealKey, hasSealKey } = require('./plan');
 const { build } = require('./build');
 const { submit, validateOperations, explorerUrl } = require('./submit');
 const { listClaimable, buildClaim, submitClaim, predicateAllows } = require('./claims');
@@ -28,10 +28,15 @@ const money = require('./money');
  *        A SHALLOW merge: overriding `metrics` or `payout` replaces the whole key.
  * @param {string|Buffer} [input.sealKey]  >= 32 bytes. When given, every plan is sealed (HMAC of its id) and
  *        `build` refuses a plan without a valid seal. Use it when the plan leaves your server (a browser, a queue).
+ *        Leave the property out to run unsealed; a property that is present but undefined, null or empty
+ *        (`sealKey: process.env.MISSING`) throws INVALID_SEAL_KEY instead of silently turning sealing off.
  */
-function createProgram({ tenant, program, overrides, sealKey }) {
-  if (sealKey !== undefined && sealKey !== null) assertSealKey(sealKey);
-  const sealed = (input) => (sealKey === undefined || sealKey === null ? input : { ...input, sealKey });
+function createProgram(options) {
+  const { tenant, program, overrides } = options;
+  const sealKey = options.sealKey;
+  const keyGiven = hasSealKey(options);
+  if (keyGiven) assertSealKey(sealKey);
+  const sealed = (input) => (keyGiven ? { ...input, sealKey } : input);
   const t = Object.isFrozen(tenant) && tenant && tenant.networkPassphrase ? tenant : defineTenant(tenant);
   let p;
   if (isProgram(program) && !overrides) p = program;

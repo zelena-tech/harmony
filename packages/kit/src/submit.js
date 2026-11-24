@@ -93,8 +93,9 @@ function validateOperations(tx, { code, issuer, wallets, expectedPayer }) {
     if (payers.length) {
       const back = notBeforeTime(payers[0].predicate);
       // The payer may only take the money back later, never while the person can still claim it.
-      // (An `unlocks` pocket of someone who cannot receive yet has a payer claimant too, never before the unlock.)
-      if (back === null || (window.type !== 'unconditional' && back < window.at)) {
+      // (An `unlocks` pocket of someone who cannot receive yet has a payer claimant too, and it is strictly
+      // AFTER the unlock: the person always gets a window of their own before the payer can claim.)
+      if (back === null || (window.type === 'before' && back < window.at) || (window.type === 'notBefore' && back <= window.at)) {
         reject(`${where} would let the payer take the money back early.`, { code: 'UNEXPECTED_PREDICATE' });
       }
     } else if (window.type !== 'notBefore') {

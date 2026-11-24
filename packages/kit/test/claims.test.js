@@ -288,8 +288,29 @@ test('submitClaim: a network failure is a 502 that lists what already went throu
     assert.equal(e.statusCode, 502);
     assert.equal(e.submitted.length, 1);
     assert.deepEqual(e.resultCodes, { transaction: 'tx_bad_seq' });
+    assert.equal(e.code, 'TRANSACTION_REJECTED');
     return true;
   });
+});
+
+test('submitClaim: no result codes is an unknown outcome (504); resubmitting the same signed claim is safe', async () => {
+  const person = keypair();
+  const w = person.publicKey();
+  const xdr = rawTx(w, [claimOp()], { sign: person }).toXDR();
+  for (const option of ['timeoutOn', 'dropOn']) { // applied but unanswered, and not applied at all
+    const h = fakeHorizon({}, { [option]: new Set([0]) });
+    await assert.rejects(submitClaim(tenant(), { wallet: w, signedXdrs: [xdr], horizon: h }), (e) => {
+      assert.equal(e.statusCode, 504);
+      assert.equal(e.code, 'SUBMISSION_UNKNOWN');
+      assert.equal(e.unknownHash, parse(xdr).hash().toString('hex'));
+      assert.deepEqual(e.submitted, []);
+      assert.match(e.message, /Resubmitting the SAME signed claim is safe/);
+      return true;
+    });
+    const again = await submitClaim(tenant(), { wallet: w, signedXdrs: [xdr], horizon: h });
+    assert.equal(again.transactions.length, 1);
+    assert.equal(h.submitted.length, 1, 'applied once, whichever way the first attempt went');
+  }
 });
 
 test('the instance methods are bound to the tenant', async () => {

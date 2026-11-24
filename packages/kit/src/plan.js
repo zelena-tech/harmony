@@ -2,7 +2,7 @@
 
 const crypto = require('node:crypto');
 const { HarmonyError, payouts } = require('@zelena/harmony-core');
-const { toStroops, fromStroops, splitByBasisPoints } = require('./money');
+const { toStroops, fromStroops, splitByBasisPoints, splitProportional } = require('./money');
 
 /**
  * Payout plan of a program: who gets how much, and how each person's reward is
@@ -45,6 +45,9 @@ function stringKeyed(map) {
  * Id of a plan: sha256 of what will be paid plus a random salt. It travels
  * on-chain as the transaction memo, which ties every payment to its plan.
  *
+ * It covers the network too, so a plan cannot be relabelled from testnet to
+ * mainnet without changing its id (and, with a `sealKey`, its seal).
+ *
  * It is a CHECKSUM, not authentication: anybody who holds a plan can edit it
  * and recompute the id. The salt keeps the public memo from being guessable
  * from the (possibly personal) participant ids; keep the plan private. To
@@ -55,6 +58,7 @@ function planIdOf(plan) {
     salt: plan.salt,
     program: plan.programId,
     tenant: plan.tenantId,
+    network: plan.network,
     asset: [plan.asset.code, plan.asset.issuer],
     createdAt: plan.createdAt,
     payments: plan.payments.map((p) => [
@@ -73,6 +77,9 @@ function assertSealKey(sealKey) {
   if (!ok) throw new HarmonyError(400, 'sealKey must be a string or a Buffer of at least 32 bytes.', { code: 'INVALID_SEAL_KEY' });
 }
 
+/** True when the input has a `sealKey` property at all, even an undefined one (an unset environment variable). */
+const hasSealKey = (input) => !!input && Object.prototype.hasOwnProperty.call(input, 'sealKey');
+
 /** HMAC-SHA256(sealKey, planId), hex: proves the plan id was issued by whoever holds the key. */
 function sealOf(planId, sealKey) {
   assertSealKey(sealKey);
@@ -90,14 +97,17 @@ function sealOf(planId, sealKey) {
  * @param {Map}    [input.walletChanges]      participantId -> { hours }
  * @param {object} [input.options]            { pool, base, topN, rate, budget, includeAlreadyPaid, allowSharedWallets }
  * @param {string} [input.salt]               32 hex chars; random by default (pass one only for reproducible tests)
- * @param {string|Buffer} [input.sealKey]     >= 32 bytes: the plan gets `seal`, which build() then requires
+ * @param {string|Buffer} [input.sealKey]     >= 32 bytes: the plan gets `seal`, which build() then requires.
+ *        If the property is present it must be a valid key: undefined, null or empty throw INVALID_SEAL_KEY
  */
 function plan(program, tenant, input) {
   const { standings, people, previous, walletChanges } = input || {};
   const opts = (input && input.options) || {};
   if (!Array.isArray(standings) || !standings.length) throw new HarmonyError(409, 'There are no standings: score the period first.');
+  // A `sealKey` property that is present but empty (sealKey: process.env.MISSING) is an error, never "no seal".
+  const sealed = hasSealKey(input);
   const sealKey = input.sealKey;
-  if (sealKey !== undefined && sealKey !== null) assertSealKey(sealKey);
+  if (sealed) assertSealKey(sealKey);
   const salt = input.salt === undefined ? crypto.randomBytes(16).toString('hex') : input.salt;
   if (typeof salt !== 'string' || !SALT_RX.test(salt)) throw new HarmonyError(400, 'salt must be 32 lowercase hex characters (16 bytes).');
   const now = input.now === undefined ? Math.floor(Date.now() / 1000) : input.now;
@@ -164,27 +174,40 @@ function plan(program, tenant, input) {
   }
   coreOptions.includeAlreadyPaid = opts.includeAlreadyPaid === true;
 
+  // WHO is paid, withheld or excluded, the ranks, the alerts and the wallet checks come from the audited
+  // planner of the engine. Its amounts are floating point, so the kit does not use them: the planner is
+  // asked with a marker prize of 1 for everybody who shares the pool (so that it lists each of them as
+  // paid or withheld, whatever the rounding would have given), and the amounts are computed below in
+  // exact BigInt stroops. The caps are applied to those exact amounts.
   const core = payouts.planCampaignPayout({
     ranking,
     previous: stringKeyed(previous),
     walletChanges: stringKeyed(walletChanges),
-    caps: tenant.payouts.caps,
+    caps: {},
     defaults: tenant.payouts.defaults,
-    options: coreOptions,
+    options: { base: coreOptions.base, topN: coreOptions.topN, fixedPrize: 1, includeAlreadyPaid: coreOptions.includeAlreadyPaid },
   });
 
-  if (model !== 'topN') {
-    // Shares of about one stroop can round up: never pay more than the pool.
-    const paid = core.payments.reduce((sum, p) => sum + toStroops(p.amount), 0n);
-    if (paid > toStroops(coreOptions.pool)) {
-      throw new HarmonyError(409, `The pool (${fromStroops(toStroops(coreOptions.pool))}) is too small for ${core.payments.length} people: `
-        + `the rounded shares add up to ${fromStroops(paid)}. Use a bigger pool or fewer people.`, { code: 'POOL_TOO_SMALL' });
-    }
+  // The people who share the pool are the top rows exactly as the planner defines them: everybody who
+  // qualified (proportional, rate) or the first topN of them. Those without a wallet keep their share
+  // withheld and those already paid are not paid again; nobody else gets it.
+  const sharers = Math.min(parseInt(coreOptions.topN, 10), ranking.length);
+  const poolStroops = toStroops(coreOptions.pool);
+  for (const r of ranking.slice(0, sharers)) {
+    if (!Number.isSafeInteger(r.adjustedPoints)) throw new HarmonyError(400, `The adjusted points of "${r.workerId}" are not an integer: score the period first.`, { code: 'INVALID_POINTS' });
   }
+  // No POOL_TOO_SMALL: the split is exact whatever the pool. If the pool has fewer stroops than there are
+  // people, some of them simply get nothing and are not paid; the shares still add up to the pool.
+  const shares = splitProportional(poolStroops, ranking.slice(0, sharers).map((r) => BigInt(r.adjustedPoints)));
+  const baseStroops = model === 'topN' ? toStroops(coreOptions.base) : 0n;
 
   const bps = program.pockets.map((k) => k.shareBp);
-  const payments = core.payments.map((p) => {
-    const total = toStroops(p.amount);
+  const payments = [];
+  for (const p of core.payments) {
+    const index = p.rank - 1;
+    const share = index < sharers ? shares[index] : 0n;
+    const total = baseStroops + share;
+    if (total <= 0n) continue; // a share that rounds to nothing is not paid
     const parts = splitByBasisPoints(total, bps);
     const standing = byId.get(String(p.workerId));
     const pockets = program.pockets
@@ -195,7 +218,7 @@ function plan(program, tenant, input) {
         rule: { type: k.rule.type, at: k.rule.type === 'instant' ? null : now + k.rule.afterSeconds },
       }))
       .filter((k, i) => parts[i] > 0n);
-    return {
+    payments.push({
       participantId: String(p.workerId),
       name: p.name,
       wallet: p.wallet,
@@ -204,12 +227,21 @@ function plan(program, tenant, input) {
       rank: p.rank,
       points: standing ? standing.adjustedPoints : null,
       level: standing ? { id: standing.level.id, name: standing.level.name, multiplier: standing.level.multiplier } : null,
-      detail: p.detail,
+      detail: share > 0n
+        ? `${baseStroops > 0n ? `base ${coreOptions.base} + ` : ''}prize ${Number(fromStroops(share)).toFixed(2)} (rank ${p.rank})`
+        : `base ${coreOptions.base}`,
       alert: p.alert,
       alreadyPaidBonus: p.alreadyPaidBonus,
       pockets,
-    };
-  });
+    });
+  }
+  // Defense in depth: the tenant caps, applied to the exact amounts.
+  const caps = tenant.payouts.caps || {};
+  payouts.applyCaps(payments.map((p) => ({ name: p.name, wallet: p.wallet, amount: Number(p.amount) })), caps);
+  const withheld = core.withheld
+    .map((x) => ({ name: x.name, rank: x.rank, amount: shares[x.rank - 1] || 0n }))
+    .filter((x) => x.amount > 0n)
+    .map((x) => ({ ...x, amount: fromStroops(x.amount) }));
 
   const result = {
     programId: program.id,
@@ -227,14 +259,14 @@ function plan(program, tenant, input) {
       rule: k.rule.type,
       amount: fromStroops(payments.reduce((s, p) => s + toStroops((p.pockets.find((x) => x.id === k.id) || { amount: 0 }).amount), 0n)),
     })),
-    withheld: core.withheld.map((x) => ({ ...x, amount: fromStroops(toStroops(x.amount)) })),
+    withheld,
     withoutWallet: core.withoutWallet,
     excludedAlreadyPaid: core.excludedAlreadyPaid,
-    flagged: core.flagged,
-    caps: core.caps,
+    flagged: payments.filter((p) => p.alert).length,
+    caps: { perPerson: caps.perPerson ?? null, perBatch: caps.perBatch ?? null },
   };
   result.planId = planIdOf(result);
-  if (sealKey !== undefined && sealKey !== null) result.seal = sealOf(result.planId, sealKey);
+  if (sealed) result.seal = sealOf(result.planId, sealKey);
   return result;
 }
 
@@ -259,4 +291,4 @@ function assertPlanIntegrity(p) {
   if (planIdOf(p) !== p.planId) bad('its id does not match its content');
 }
 
-module.exports = { plan, planIdOf, assertPlanIntegrity, peopleMap, sealOf, assertSealKey };
+module.exports = { plan, planIdOf, assertPlanIntegrity, peopleMap, sealOf, assertSealKey, hasSealKey };

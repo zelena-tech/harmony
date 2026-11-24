@@ -132,6 +132,13 @@ async function buildClaim(tenant, { wallet, balanceIds, horizon }) {
 /**
  * Validates and submits a signed claim. Only two kinds of operation are
  * accepted: the trustline of the reward asset and claims.
+ *
+ * Stops at the first failure and throws a HarmonyError whose `submitted` lists what DID go through:
+ *
+ *  - 502, code TRANSACTION_REJECTED: the network answered with result codes; the transaction
+ *    `failedHash` was NOT applied.
+ *  - 504, code SUBMISSION_UNKNOWN: no result codes (timeout, 5xx, network error); `unknownHash` MAY have
+ *    been applied. Resubmitting the SAME signed claim is safe: the network deduplicates by hash.
  */
 async function submitClaim(tenant, { wallet, signedXdrs, horizon }) {
   if (!Array.isArray(signedXdrs) || !signedXdrs.length) throw new HarmonyError(400, 'No signed transactions were received.');
@@ -144,6 +151,7 @@ async function submitClaim(tenant, { wallet, signedXdrs, horizon }) {
       throw new HarmonyError(400, `Invalid XDR or wrong network: ${e.message}`);
     }
     if (tx.innerTransaction) throw new HarmonyError(400, 'Fee-bump transactions are not accepted. Not submitted.');
+    const hash = typeof tx.hash === 'function' ? tx.hash().toString('hex') : null;
     if (tx.source !== wallet) throw new HarmonyError(400, 'The transaction was not built for this wallet. Not submitted.');
     for (const op of tx.operations) {
       // A limit of 0 would REMOVE the trustline: only the default (maximum) or a positive limit.
@@ -157,8 +165,13 @@ async function submitClaim(tenant, { wallet, signedXdrs, horizon }) {
     let res;
     try { res = await h.submitTransaction(tx); } catch (e) {
       const codes = e && e.response && e.response.data && e.response.data.extras && e.response.data.extras.result_codes;
-      throw new HarmonyError(502, `The network rejected the claim: ${codes ? JSON.stringify(codes) : e.message}`,
-        { resultCodes: codes || null, submitted: transactions });
+      if (codes) {
+        throw new HarmonyError(502, `The network rejected the claim: ${JSON.stringify(codes)}`,
+          { code: 'TRANSACTION_REJECTED', resultCodes: codes, failedHash: hash, submitted: transactions });
+      }
+      throw new HarmonyError(504, `The outcome of the claim ${String(hash).slice(0, 8)}… is unknown (${(e && e.message) || 'no answer'}). `
+        + 'It may still be applied. Resubmitting the SAME signed claim is safe: the network deduplicates by hash.',
+      { code: 'SUBMISSION_UNKNOWN', unknownHash: hash, submitted: transactions });
     }
     transactions.push({
       hash: res.hash,

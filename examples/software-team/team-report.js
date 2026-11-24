@@ -252,7 +252,7 @@ function buildReport(cfg, harmony, reads, { since, until, now, fixtures }) {
   const ignored = countBy(all.filter((e) => !valued.has(e.metric)));
 
   const result = {
-    harmony, events, ignored, unmapped, milestones, creditEveryone, display, now, since, until, fixtures,
+    harmony, events, ignored, unmapped, assumedCanonical: merged.assumedCanonical, milestones, creditEveryone, display, now, since, until, fixtures,
     standings: [], totals: null, plan: null, planError: null, idle: [],
   };
   const seen = new Set(events.map((e) => String(e.participantId)));
@@ -358,6 +358,12 @@ function printScreen(cfg, rep, reads, outDir, files) {
     console.log('  Kept as they came, so a person may appear twice. Add them to "identities" (id -> canonical person id):');
     for (const id of rep.unmapped) console.log(`    ${id}`);
   }
+  if (rep.assumedCanonical.length) {
+    console.log('\nTAKEN AS THE SAME PERSON BECAUSE THE ID MATCHES');
+    console.log('  These ids are not mapped in "identities", but they equal a canonical person id, so their work was added to that person.');
+    console.log('  If one of them is really somebody else, rename it or map it in "identities" before paying:');
+    for (const id of rep.assumedCanonical) console.log(`    ${id}`);
+  }
   if (rep.idle.length) console.log(`\nIn "people" but with no activity in the period: ${rep.idle.join(', ')}`);
 
   console.log(`\nFILES  ${path.relative(process.cwd(), outDir) || '.'}${path.sep}`);
@@ -411,6 +417,11 @@ function markdown(cfg, rep, reads) {
     L.push('', '## Unmapped identities', '', 'These ids were not in `identities`, so they are counted as separate people:', '');
     for (const id of rep.unmapped) L.push(`- ${mdCell(id)}`);
   }
+  if (rep.assumedCanonical.length) {
+    L.push('', '## Taken as the same person because the id matches', '',
+      'These ids are not mapped in `identities`, but they equal a canonical person id, so their work was added to that person. Check that they really are the same person before paying:', '');
+    for (const id of rep.assumedCanonical) L.push(`- ${mdCell(id)}`);
+  }
   return `${L.join('\n')}\n`;
 }
 
@@ -434,6 +445,7 @@ function writeFiles(cfg, rep, reads, outDir) {
     plan: rep.plan,
     planError: rep.planError,
     unmapped: rep.unmapped,
+    assumedCanonical: rep.assumedCanonical,
     events: rep.events,
   };
   put('report.json', `${JSON.stringify(report, null, 2)}\n`);

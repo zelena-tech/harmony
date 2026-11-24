@@ -5,7 +5,7 @@ const { toDate, resolveFetch, inWindow } = require('./util');
 
 const CHUNK = 200;
 const DEFAULT_METRICS = { item_done: 'item_done', bug_fixed: 'bug_fixed' };
-const DEFAULT_MAX_EFFORT = 100;
+const DEFAULT_MAX_EFFORT = 13; // the usual top of a story-point scale (1, 2, 3, 5, 8, 13)
 
 /** WIQL string literal: single quotes are doubled. */
 const lit = (v) => `'${String(v).replace(/'/g, "''")}'`;
@@ -87,7 +87,8 @@ async function post(ctx, path, body) {
  * @param {string[]} [o.types] restrict to these work item types
  * @param {'uniqueName'|'id'} [o.participantKey='uniqueName']
  * @param {Partial<typeof DEFAULT_METRICS>} [o.metrics]
- * @param {number} [o.maxEffort=100] largest effort one item may credit. Effort is editable by any board user,
+ * @param {number} [o.maxEffort=13] largest effort one item may credit (13 is the usual top of a story-point scale;
+ *        raise it if your team estimates in hours or bigger units). Effort is editable by any board user,
  *        so a larger value is clamped to this one and the item id is listed in `clamped`. A missing, zero,
  *        negative or non-finite effort counts as 1.
  * @returns {Promise<{events: Array, people: Array, window: object, items: Array, unassigned: {count: number, ids: number[]}, clamped: number[]}>}

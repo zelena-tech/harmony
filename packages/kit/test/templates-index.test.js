@@ -237,3 +237,12 @@ test('software-delivery caps the effort of a board item, which any board user ca
   assert.equal(standings[0].byMetric.item_done.units, 200);
   assert.equal(standings[0].adjustedPoints, 1000);
 });
+
+test('software-delivery caps every metric a team member can inflate from the tools', () => {
+  const metrics = Object.fromEntries(kit.template('software-delivery').metrics.map((m) => [m.id, m.cap]));
+  assert.equal(metrics.pr_merged, 60);
+  assert.equal(metrics.review, 120);
+  assert.equal(metrics.bug_fixed, 30);
+  assert.equal(metrics.item_done, 200);
+  assert.equal(metrics.commit, 100);
+});

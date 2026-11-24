@@ -52,9 +52,10 @@ it is retried a few times; if the testnet is unreachable it says so and stops.
 3. Generates made-up work for four made-up people, scores it and plans the payout.
 4. Builds, signs (as the payer) and submits. A and B get a payment plus their
    claimable pockets; C and D get their instant pocket as a hold.
-5. Builds the same plan again. `build` reads the payer's latest transactions on
-   Horizon, finds the payout by its memo and refuses with
-   `PLAN_ALREADY_SUBMITTED` (the expected outcome), listing the payout hash.
+5. Builds the same plan again. `build` pages back through the payer's
+   transactions on Horizon until the time of the plan, finds the payout by its
+   memo and refuses with `PLAN_ALREADY_SUBMITTED` (the expected outcome),
+   listing the payout hash.
 6. C claims everything that is claimable now with one transaction.
 7. A tries the locked pocket at once (refused by the network, the expected
    outcome), waits for the network clock to pass the unlock time and claims.
@@ -64,27 +65,29 @@ it is retried a few times; if the testnet is unreachable it says so and stops.
 
 ## Evidence
 
-Run of **2026-11-24** (testnet), template `last-mile-delivery`. Public keys:
-issuer `GAHQ6BGQJ56JETFPV7A5NRHZSKU7ZRAFXQYPUH6FHZTBVG5IOBTEF6RN`, payer
-`GA2AYXOCUJ5P7ZQVYRHXG65EQCI3EW4RKHNIVR5K4FXWT6MW6H27LKD2`, A (Ana)
-`GARFCE4UFDES5UBBVLRALLOLTV7ASOCSFW7YOJUGZUBZSW4IH4GKLIN4`, B (Luis)
-`GCFYNDPTYJ4MFU7CUPWYNVI3KVIAA7OC2SJ7QOHP4PMIFX4NK5SOLGVC`, C (Sofia)
-`GBGUTXNXYL645FY5PVEREX2YN524QVSP7PVM7CNLFUVRSW5D52Z72B7U`, D (Mateo, never
-created) `GDD6U6IP2EZA4BSNIIO6A3NQ4SQQDVYRGCWFIWO4HS5MFD5F7BTGPPIH`.
-Plan id `25e4db2c3d6c41934418441753f6e2ababcc37b986eb3de7e8545326897e1865`.
+Run of **2026-11-24** (testnet), template `last-mile-delivery`, with the second
+round of fixes of the kit (exact split between people, paged already-submitted
+lookup, payer claimant never at the same second as the person). Public keys:
+issuer `GBEYJDR2UJKRAN33JXIQ4ZRJ3CI3DVK5U7GKQESATS54352557CXDMSE`, payer
+`GAEHBAJBOX5XLX77PZSHORGL3FVV3NZLYIEKWM42QP327475F56KDQJJ`, A (Ana)
+`GBBXXE6D7NGXKZDMN767SQZNO4QAWMHVXFKUHWODUT4WJ4GFWPRYDMEN`, B (Luis)
+`GDCIH3KNQWGDTM6ZKOGDIC5M3NKXHFAVOUBWYMI6GQN53CW5YG4H7F3Z`, C (Sofia)
+`GCEI7YKQSZT6BJCC3UNU3CCVTKQTOMIZC34OST5J5BW5UOKE7GUWECVL`, D (Mateo, never
+created) `GDWOFKLRQOVQ4AEPPSJWOO4HKNPIOAS3RE7J3WSNE5JGV62WBPTO4DQF`.
+Plan id `393a4fc3b969d26cb53b4163912ab050a9716326e2a491113e7bae9e6e645459`.
 
 | Stage | What | Transaction |
 | --- | --- | --- |
-| 1 | Trustline of the payer | [e3452473...](https://stellar.expert/explorer/testnet/tx/e3452473ed1947e8d8d29d4649e1386cce091c2458aaf59390cf4dbbb7512f5b) |
-| 1 | Trustline of A | [c481b3b2...](https://stellar.expert/explorer/testnet/tx/c481b3b25a689c3bf2f259a53ded8abbfdecacaf458b5ed1a3da6ff0f9bbc253) |
-| 1 | Trustline of B | [9ac658ed...](https://stellar.expert/explorer/testnet/tx/9ac658ed1c9d9b6269f44dcf35bfddc01a1baa4341c47b75e20f3d4898346d28) |
-| 1 | Issuer pays 10000 TESTUSD to the payer | [2f585764...](https://stellar.expert/explorer/testnet/tx/2f5857647dc6f393712e33454c5973ec31a4dba9bfad848cb6684bdceef4890b) |
-| 4 | Payout: 12 operations (2 payments, 4 expires, 4 unlocks, 2 holds), 45.96 TESTUSD | [f01a7719...](https://stellar.expert/explorer/testnet/tx/f01a77192c9b9f3457fcf9e856303eb730347f8e0e61cc80f196fff8577f314b) |
-| 5 | Second `build` of the same plan **refused** (`PLAN_ALREADY_SUBMITTED`, HTTP 409): it found the payout above by its memo | [f01a7719...](https://stellar.expert/explorer/testnet/tx/f01a77192c9b9f3457fcf9e856303eb730347f8e0e61cc80f196fff8577f314b) |
-| 6 | C: trustline + 2 claims in one transaction (7.038 TESTUSD) | [687328bb...](https://stellar.expert/explorer/testnet/tx/687328bbc29e5a90e3478949a9395b20eda267966eaf630f9b24263e5b661bc0) |
-| 7 | A: early claim of the locked pocket, **refused** (`tx_failed` / `op_cannot_claim`) | [92034b5f...](https://stellar.expert/explorer/testnet/tx/92034b5fc449cd9e85408b05181a8fe603646cd7a002658947401c6f0af4975f) |
-| 7 | A: same claim after the unlock time, accepted | [cc4e9b2d...](https://stellar.expert/explorer/testnet/tx/cc4e9b2d626a8468051f12b540e53a55af5aa21afe65043cd39cf142856766e2) |
-| 8 | D: nothing to submit. Three claimable balances (9.21, 1.842 and 1.228 TESTUSD) wait for an account that does not exist; the 1.842 `unlocks` balance has two claimants on the network (D and the payer, from 2026-12-24) | (listed from the payout transaction above) |
+| 1 | Trustline of the payer | [0c5ae51b...](https://stellar.expert/explorer/testnet/tx/0c5ae51b7808d43d10512d923898455faa8302ba08a5f308e79c0e751f37e806) |
+| 1 | Trustline of A | [b767b853...](https://stellar.expert/explorer/testnet/tx/b767b85379d9d8165e82dac576caf57bb770f2b8ae6956b12635a75cc6ac421e) |
+| 1 | Trustline of B | [1baa2047...](https://stellar.expert/explorer/testnet/tx/1baa204728ee3c94296ee60cf6e67988f1adeda85210299048c28f227c87a34f) |
+| 1 | Issuer pays 10000 TESTUSD to the payer | [2f036eaf...](https://stellar.expert/explorer/testnet/tx/2f036eaf56454c4092488085944073a8ebd54c690f714382ca5dc4a2a0d2b4f1) |
+| 4 | Payout: 12 operations (2 payments, 4 expires, 4 unlocks, 2 holds), 45.96 TESTUSD | [18a1b9f9...](https://stellar.expert/explorer/testnet/tx/18a1b9f9e2c060ad3f27c22cd5d13eef8c4ce77896702e4c3198783b819d56eb) |
+| 5 | Second `build` of the same plan **refused** (`PLAN_ALREADY_SUBMITTED`, HTTP 409): it found the payout above by its memo | [18a1b9f9...](https://stellar.expert/explorer/testnet/tx/18a1b9f9e2c060ad3f27c22cd5d13eef8c4ce77896702e4c3198783b819d56eb) |
+| 6 | C: trustline + 2 claims in one transaction (7.038 TESTUSD) | [2a6376c1...](https://stellar.expert/explorer/testnet/tx/2a6376c16408662ea5cf1dc572407800235243fa812b3ce2b8be32d017bddd98) |
+| 7 | A: early claim of the locked pocket, **refused** (`tx_failed` / `op_cannot_claim`) | [ddcd4b49...](https://stellar.expert/explorer/testnet/tx/ddcd4b49b5f7d86d6fe34bdeb8de908be5fbaf41fe8e82362b1f53c3f0a9bda7) |
+| 7 | A: same claim after the unlock time, accepted | [58f74b20...](https://stellar.expert/explorer/testnet/tx/58f74b20c7923188ae2d29c823c2ff97a8b52d9ff3567e1b04eac8a8161bfafd) |
+| 8 | D: nothing to submit. Three claimable balances (9.21, 1.842 and 1.228 TESTUSD) wait for an account that does not exist; the 1.842 `unlocks` balance has two claimants on the network (D and the payer, from 2026-12-24T06:25:17Z: the unlock time plus the 30 day reclaim window) | (listed from the payout transaction above) |
 
 Network checks printed in stage 4: the payer sponsors 18 entries, exactly the
 18 claimants the kit counted (9 XLM of reserve: C and D each have a payer

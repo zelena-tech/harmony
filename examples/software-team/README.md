@@ -88,7 +88,9 @@ email address. If you prefer not to store emails, set `"participantKey": "id"`
 on the Azure entry and map the identity GUIDs instead. Any id you do not map is
 kept as it came and listed at the end under "Unmapped identities" so you can
 complete the file; until then that person may appear twice (for example once by
-GitHub login and once by email).
+GitHub login and once by email). An id that is not mapped but equals a canonical
+id is taken as that person and listed under "Taken as the same person because
+the id matches": check it, because two different people can share an id.
 
 Wallets are optional. Without one a person is still ranked and gets a card, and
 the plan shows the share that would be withheld for them.
@@ -113,6 +115,12 @@ Points come from the `software-delivery` template, unless you override it:
 | `bug_fixed` | Azure Boards: a closed bug | 10 |
 | `milestone` | GitHub: a closed milestone, via `creditEveryone` | 50 |
 | `commit` | GitHub, off by default | 1 (max 100) |
+
+Every metric has a cap (`pr_merged` 60, `review` 120, `bug_fixed` 30,
+`item_done` 200, `commit` 100 units per person and period) and Azure effort is
+clamped at 13 per item by default. These numbers come from tools that any team
+member can edit, so the caps limit the damage but do not remove it: review the
+event list (every event links to its source in `report.json`) before paying.
 
 Then, per person: `adjusted points = points x level multiplier`. The pool is
 shared between everyone in proportion to adjusted points. Each person's amount
