@@ -27,3 +27,7 @@ examples/private-payouts/.*-llaves.json
 examples/private-payouts/.pago-privado-keys.json
 examples/private-payouts/salida/
 examples/private-payouts/node_modules/
+
+# Quickstart examples: generated cards and summaries
+examples/out/
+examples/quickstart-testnet/out/
